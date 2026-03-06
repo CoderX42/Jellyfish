@@ -1,6 +1,7 @@
 import { http, HttpResponse } from 'msw'
-import type { Project } from './data'
+import type { Project, Agent } from './data'
 import {
+  agents as initialAgents,
   assets,
   chapters,
   files,
@@ -13,6 +14,7 @@ import {
 
 // 可变的项目列表，支持创建/编辑/删除（会话内生效）
 let projectsList: Project[] = [...initialProjects]
+let agentsList: Agent[] = [...initialAgents]
 
 function nextProjectId(): string {
   const max = projectsList.reduce((m, p) => {
@@ -127,6 +129,68 @@ export const handlers = [
   // 某项目的时间线数据
   http.get('/api/projects/:projectId/timeline', () => {
     return HttpResponse.json(timelineClips, { status: 200 })
+  }),
+
+  // Agent 列表
+  http.get('/api/agents', () => {
+    return HttpResponse.json(agentsList, { status: 200 })
+  }),
+
+  // 单个 Agent 详情
+  http.get('/api/agents/:id', ({ params }) => {
+    const { id } = params as { id: string }
+    const agent = agentsList.find((a) => a.id === id)
+    if (!agent) return HttpResponse.json({ message: 'Agent 不存在' }, { status: 404 })
+    return HttpResponse.json(agent, { status: 200 })
+  }),
+
+  // 创建 Agent
+  http.post('/api/agents', async ({ request }) => {
+    const body = (await request.json()) as Partial<Agent> & { name: string; type: Agent['type']; description?: string }
+    const id = `agent${Date.now()}`
+    const now = new Date().toISOString().slice(0, 10)
+    const newAgent: Agent = {
+      id,
+      name: body.name ?? '未命名 Agent',
+      type: body.type ?? 'other',
+      description: body.description ?? '',
+      isDefault: false,
+      version: 'v1.0',
+      updatedAt: now,
+      createdAt: now,
+      createdBy: 'extreme',
+      updatedBy: 'extreme',
+    }
+    agentsList = [...agentsList, newAgent]
+    return HttpResponse.json(newAgent, { status: 201 })
+  }),
+
+  // 更新 Agent（含设置默认）
+  http.put('/api/agents/:id', async ({ params, request }) => {
+    const { id } = params as { id: string }
+    const idx = agentsList.findIndex((a) => a.id === id)
+    if (idx === -1) return HttpResponse.json({ message: 'Agent 不存在' }, { status: 404 })
+    const body = (await request.json()) as Partial<Agent>
+    const now = new Date().toISOString().slice(0, 10)
+    const updated = { ...agentsList[idx], ...body, id: agentsList[idx].id, updatedAt: now }
+    if (body.isDefault === true) {
+      agentsList = agentsList.map((a) =>
+        a.type === updated.type && a.id !== id ? { ...a, isDefault: false } : a
+      )
+      agentsList[idx] = updated
+    } else {
+      agentsList = agentsList.map((a, i) => (i === idx ? updated : a))
+    }
+    return HttpResponse.json(agentsList[idx], { status: 200 })
+  }),
+
+  // 删除 Agent
+  http.delete('/api/agents/:id', ({ params }) => {
+    const { id } = params as { id: string }
+    const idx = agentsList.findIndex((a) => a.id === id)
+    if (idx === -1) return HttpResponse.json({ message: 'Agent 不存在' }, { status: 404 })
+    agentsList = agentsList.filter((a) => a.id !== id)
+    return new HttpResponse(null, { status: 204 })
   }),
 ]
 

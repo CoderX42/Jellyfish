@@ -8,6 +8,7 @@ import type {
   PromptTemplate,
   FileItem,
   TimelineClip,
+  Agent,
 } from '../mocks/data'
 
 const api = {
@@ -38,6 +39,14 @@ const api = {
   timeline: {
     get: (projectId: string) =>
       get<TimelineClip[]>(`/projects/${projectId}/timeline`),
+  },
+  agents: {
+    list: () => get<Agent[]>('/agents'),
+    get: (id: string) => get<Agent>(`/agents/${id}`),
+    create: (data: Partial<Agent> & { name: string; type: Agent['type'] }) =>
+      post<Agent>('/agents', data),
+    update: (id: string, data: Partial<Agent>) => put<Agent>(`/agents/${id}`, data),
+    delete: (id: string) => del<void>(`/agents/${id}`),
   },
 }
 

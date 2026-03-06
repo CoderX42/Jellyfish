@@ -121,6 +121,22 @@ export interface TimelineClip {
   track: number
 }
 
+/** Agent 类型：剧情提取、角色提取、场景提取、道具提取、其他 */
+export type AgentTypeKey = 'plot' | 'character' | 'scene' | 'prop' | 'other'
+
+export interface Agent {
+  id: string
+  name: string
+  type: AgentTypeKey
+  description: string
+  isDefault: boolean
+  version: string
+  updatedAt: string
+  createdAt: string
+  createdBy: string
+  updatedBy: string
+}
+
 export const projects: Project[] = [
   {
     id: 'p1',
@@ -783,6 +799,69 @@ export const timelineClips: TimelineClip[] = [
     start: 0,
     end: 20,
     track: 2,
+  },
+]
+
+export const agents: Agent[] = [
+  {
+    id: 'agent1',
+    name: '剧情提取Agent v2.1',
+    type: 'plot',
+    description: '基于GPT-4提取主线剧情，优化效率',
+    isDefault: true,
+    version: 'v2.1',
+    updatedAt: '2026-03-05',
+    createdAt: '2026-02-01',
+    createdBy: 'extreme',
+    updatedBy: 'extreme',
+  },
+  {
+    id: 'agent2',
+    name: '角色提取Agent v1.0',
+    type: 'character',
+    description: '从剧本中提取角色名称与关系',
+    isDefault: true,
+    version: 'v1.0',
+    updatedAt: '2026-03-04',
+    createdAt: '2026-02-10',
+    createdBy: 'extreme',
+    updatedBy: 'extreme',
+  },
+  {
+    id: 'agent3',
+    name: '场景提取Agent v1.2',
+    type: 'scene',
+    description: '识别场景切换与场景描述',
+    isDefault: false,
+    version: 'v1.2',
+    updatedAt: '2026-03-03',
+    createdAt: '2026-02-15',
+    createdBy: 'extreme',
+    updatedBy: 'extreme',
+  },
+  {
+    id: 'agent4',
+    name: '道具提取Agent v1.0',
+    type: 'prop',
+    description: '提取剧本中出现的道具与关键物品',
+    isDefault: false,
+    version: 'v1.0',
+    updatedAt: '2026-03-02',
+    createdAt: '2026-02-20',
+    createdBy: 'extreme',
+    updatedBy: 'extreme',
+  },
+  {
+    id: 'agent5',
+    name: '剧情提取Agent v2.0',
+    type: 'plot',
+    description: '旧版剧情提取，保留作对比',
+    isDefault: false,
+    version: 'v2.0',
+    updatedAt: '2026-02-28',
+    createdAt: '2026-01-25',
+    createdBy: 'extreme',
+    updatedBy: 'extreme',
   },
 ]
 

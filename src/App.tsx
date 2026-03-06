@@ -11,6 +11,8 @@ import AssetManager from './pages/aiStudio/assets/AssetManager'
 import PromptTemplateManager from './pages/aiStudio/prompts/PromptTemplateManager'
 import FileManager from './pages/aiStudio/files/FileManager'
 import VideoEditor from './pages/aiStudio/editor/VideoEditor'
+import AgentManagement from './pages/aiStudio/agents/AgentManagement'
+import AgentEdit from './pages/aiStudio/agents/AgentEdit'
 import './App.css'
 
 const App: React.FC = () => {
@@ -27,9 +29,11 @@ const App: React.FC = () => {
           <Route path="assets" element={<AssetManager />} />
           <Route path="prompts" element={<PromptTemplateManager />} />
           <Route path="files" element={<FileManager />} />
+          <Route path="agents/:id/edit" element={<AgentEdit />} />
+          <Route path="agents" element={<AgentManagement />} />
           <Route path="settings" element={<Settings />} />
+          <Route path="*" element={<NotFound />} />
         </Route>
-        <Route path="*" element={<NotFound />} />
       </Routes>
     </BrowserRouter>
   )

@@ -9,6 +9,7 @@ import {
   PictureOutlined,
   FileTextOutlined,
   InboxOutlined,
+  RobotOutlined,
 } from '@ant-design/icons'
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useAppStore } from '../store/useAppStore'
@@ -33,6 +34,7 @@ const MainLayout: React.FC = () => {
     if (location.pathname.startsWith('/assets')) return ['assets']
     if (location.pathname.startsWith('/prompts')) return ['prompts']
     if (location.pathname.startsWith('/files')) return ['files']
+    if (location.pathname.startsWith('/agents')) return ['agents']
     if (location.pathname.startsWith('/settings')) return ['settings']
     return []
   }, [location.pathname])
@@ -46,10 +48,12 @@ const MainLayout: React.FC = () => {
       assets: '资产管理',
       prompts: '提示词模板',
       files: '文件管理',
+      agents: 'Agent管理',
       settings: t('menu.settings'),
       chapters: '章节管理',
       studio: '分镜工作室',
       editor: '视频剪辑',
+      edit: '编辑',
     }
     let href = ''
     path.forEach((segment, i) => {
@@ -89,6 +93,11 @@ const MainLayout: React.FC = () => {
       key: 'files',
       icon: <InboxOutlined />,
       label: <Link to="/files">文件管理</Link>,
+    },
+    {
+      key: 'agents',
+      icon: <RobotOutlined />,
+      label: <Link to="/agents">Agent管理</Link>,
     },
     {
       key: 'settings',

@@ -6,9 +6,8 @@ import pytest
 from langchain_core.messages import AIMessage
 from langchain_core.runnables import RunnableLambda
 
+from app.chains.agents import FilmEntityExtractor, FilmShotlistStoryboarder
 from app.core.skills_runtime import (
-    FilmEntityExtractor,
-    FilmShotlistStoryboarder,
     FilmEntityExtractionResult,
     FilmShotlistResult,
     SKILL_REGISTRY,

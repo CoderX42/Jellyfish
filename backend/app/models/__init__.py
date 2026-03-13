@@ -5,17 +5,14 @@ from app.models.base import TimestampMixin
 
 from app.models.llm import Model, ModelSettings, Provider
 from app.models.task import GenerationTask
-from app.models.task_links import (
-    ChapterGenerationTaskLink,
-    ProjectGenerationTaskLink,
-    ShotGenerationTaskLink,
-)
+from app.models.task_links import GenerationTaskLink
 from app.models.studio import (
     Actor,
     ActorImage,
     ActorImageImage,
     Chapter,
     Character,
+    CharacterImage,
     CharacterPropLink,
     Costume,
     CostumeImage,
@@ -32,6 +29,8 @@ from app.models.studio import (
     ShotCostumeLink,
     ShotDetail,
     ShotDialogLine,
+    ShotFrameImage,
+    ShotFrameType,
     ShotPropLink,
     ShotSceneLink,
     TimelineClip,
@@ -45,6 +44,8 @@ __all__ = [
     "Shot",
     "ShotDetail",
     "ShotDialogLine",
+    "ShotFrameImage",
+    "ShotFrameType",
     "ShotActorImageLink",
     "ShotSceneLink",
     "ShotPropLink",
@@ -52,6 +53,7 @@ __all__ = [
     "ShotCharacterLink",
     "Actor",
     "Character",
+    "CharacterImage",
     "CharacterPropLink",
     "ActorImage",
     "ActorImageImage",
@@ -68,7 +70,5 @@ __all__ = [
     "Model",
     "ModelSettings",
     "GenerationTask",
-    "ProjectGenerationTaskLink",
-    "ChapterGenerationTaskLink",
-    "ShotGenerationTaskLink",
+    "GenerationTaskLink",
 ]

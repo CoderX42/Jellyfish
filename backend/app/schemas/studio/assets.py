@@ -118,3 +118,10 @@ class CostumeImageRead(AssetImageBase):
     class Config:
         from_attributes = True
 
+
+class CharacterImageRead(AssetImageBase):
+    character_id: str
+
+    class Config:
+        from_attributes = True
+

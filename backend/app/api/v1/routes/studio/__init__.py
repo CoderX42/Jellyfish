@@ -2,16 +2,7 @@
 
 from fastapi import APIRouter
 
-from app.api.v1.routes.studio import (
-    assets,
-    cast,
-    chapters,
-    files,
-    projects,
-    prompts,
-    shots,
-    timeline,
-)
+from app.api.v1.routes.studio import assets, cast, chapters, files, image_tasks, projects, prompts, shots, timeline
 
 router = APIRouter()
 
@@ -22,8 +13,10 @@ router.include_router(shots.router, prefix="/shots", tags=["studio/shots"])
 router.include_router(shots.details_router, prefix="/shot-details", tags=["studio/shot-details"])
 router.include_router(shots.dialog_router, prefix="/shot-dialog-lines", tags=["studio/shot-dialog-lines"])
 router.include_router(shots.links_router, prefix="/shot-links", tags=["studio/shot-links"])
+router.include_router(shots.frames_router, prefix="/shot-frame-images", tags=["studio/shot-frame-images"])
 
 router.include_router(assets.router, prefix="/assets", tags=["studio/assets"])
+router.include_router(image_tasks.router, prefix="/image-tasks", tags=["studio/image-tasks"])
 router.include_router(cast.router, prefix="/cast", tags=["studio/cast"])
 router.include_router(prompts.router, prefix="/prompts", tags=["studio/prompts"])
 router.include_router(files.router, prefix="/files", tags=["studio/files"])

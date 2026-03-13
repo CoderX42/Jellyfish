@@ -9,12 +9,8 @@ from fastapi.testclient import TestClient
 from langchain_core.messages import AIMessage
 from langchain_core.runnables import Runnable, RunnableLambda
 
-from app.core.skills_runtime import (
-    FilmEntityExtractor,
-    FilmShotlistStoryboarder,
-    FilmEntityExtractionResult,
-    FilmShotlistResult,
-)
+from app.chains.agents import FilmEntityExtractor, FilmShotlistStoryboarder
+from app.core.skills_runtime import FilmEntityExtractionResult, FilmShotlistResult
 
 
 # ---------- FastAPI 应用集成 ----------

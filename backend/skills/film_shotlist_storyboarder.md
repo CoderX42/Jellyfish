@@ -54,6 +54,7 @@
 
 ## 实现与调用
 
-- **实现位置**：`app.core.skills_runtime.film_shotlist_storyboarder`
+- **技能定义**（Prompt + 输出模型）：`app.core.skills_runtime.film_shotlist_storyboarder`
+- **Agent 运行**：`app.chains.agents.extra_agents.FilmShotlistStoryboarder`（基类 `SkillAgentBase`）
 - **Prompt**：`FILM_SHOTLIST_PROMPT`
 - **输出模型**：`FilmShotlistResult`（内含 `ProjectCinematicBreakdown`，用于校验与解析 LLM 输出）

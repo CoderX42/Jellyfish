@@ -1,4 +1,4 @@
-"""将 skills_runtime 的抽取器封装为 BaseTask 任务。
+"""将 core/agents 的抽取器封装为 BaseTask 任务。
 
 目的：
 - 让 FilmEntityExtractor / FilmShotlistStoryboarder 可以直接作为 TaskManager 的任务单元
@@ -9,9 +9,8 @@ from __future__ import annotations
 
 from typing import Any, AsyncIterator, Optional
 
-from app.core.skills_runtime.base import FilmEntityExtractor, FilmShotlistStoryboarder
-from app.core.skills_runtime.film_entity_extractor import FilmEntityExtractionResult
-from app.core.skills_runtime.film_shotlist_storyboarder import FilmShotlistResult
+from app.chains.agents import FilmEntityExtractor, FilmShotlistStoryboarder
+from app.core.skills_runtime import FilmEntityExtractionResult, FilmShotlistResult
 from app.core.task_manager.types import BaseTask
 
 

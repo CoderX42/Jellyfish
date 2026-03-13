@@ -42,6 +42,7 @@
 
 ## 实现与调用
 
-- **实现位置**：`app.core.skills_runtime.film_entity_extractor`
+- **技能定义**（Prompt + 输出模型）：`app.core.skills_runtime.film_entity_extractor`
+- **Agent 运行**：`app.chains.agents.extra_agents.FilmEntityExtractor`（基类 `SkillAgentBase`）
 - **Prompt**：`FILM_ENTITY_EXTRACTION_PROMPT`
 - **输出模型**：`FilmEntityExtractionResult`（用于校验与解析 LLM 输出）

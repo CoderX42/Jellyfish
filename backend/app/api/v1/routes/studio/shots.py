@@ -20,6 +20,7 @@ from app.models.studio import (
     ShotCostumeLink,
     ShotDetail,
     ShotDialogLine,
+    ShotFrameImage,
     ShotPropLink,
     ShotSceneLink,
 )
@@ -40,17 +41,22 @@ from app.schemas.studio.shots import (
     ShotRead,
     ShotSceneLinkRead,
     ShotUpdate,
+    ShotFrameImageCreate,
+    ShotFrameImageRead,
+    ShotFrameImageUpdate,
 )
 
 router = APIRouter()
 details_router = APIRouter()
 dialog_router = APIRouter()
 links_router = APIRouter()
+frames_router = APIRouter()
 
 SHOT_ORDER_FIELDS = {"index", "title", "status", "created_at", "updated_at"}
 DETAIL_ORDER_FIELDS = {"id"}
 DIALOG_ORDER_FIELDS = {"index", "id", "created_at", "updated_at"}
 LINK_ORDER_FIELDS = {"index", "id", "created_at", "updated_at"}
+FRAME_IMAGE_ORDER_FIELDS = {"id", "frame_type", "created_at", "updated_at"}
 
 
 async def _ensure_chapter(db: AsyncSession, chapter_id: str) -> None:
@@ -377,6 +383,99 @@ async def delete_shot_dialog_line(
     db: AsyncSession = Depends(get_db),
 ) -> ApiResponse[None]:
     obj = await db.get(ShotDialogLine, line_id)
+    if obj is None:
+        return success_response(None)
+    await db.delete(obj)
+    await db.flush()
+    return success_response(None)
+
+
+# ---------- ShotFrameImage ----------
+
+
+@frames_router.get(
+    "",
+    response_model=ApiResponse[PaginatedData[ShotFrameImageRead]],
+    summary="镜头分镜帧图片列表（分页）",
+)
+async def list_shot_frame_images(
+    db: AsyncSession = Depends(get_db),
+    shot_detail_id: str | None = Query(None, description="按镜头细节过滤"),
+    order: str | None = Query(None),
+    is_desc: bool = Query(False),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(10, ge=1, le=100),
+) -> ApiResponse[PaginatedData[ShotFrameImageRead]]:
+    stmt = select(ShotFrameImage)
+    if shot_detail_id is not None:
+        stmt = stmt.where(ShotFrameImage.shot_detail_id == shot_detail_id)
+    stmt = apply_order(
+        stmt,
+        model=ShotFrameImage,
+        order=order,
+        is_desc=is_desc,
+        allow_fields=FRAME_IMAGE_ORDER_FIELDS,
+        default="id",
+    )
+    items, total = await paginate(db, stmt=stmt, page=page, page_size=page_size)
+    return paginated_response(
+        [ShotFrameImageRead.model_validate(x) for x in items],
+        page=page,
+        page_size=page_size,
+        total=total,
+    )
+
+
+@frames_router.post(
+    "",
+    response_model=ApiResponse[ShotFrameImageRead],
+    status_code=status.HTTP_201_CREATED,
+    summary="创建镜头分镜帧图片",
+)
+async def create_shot_frame_image(
+    body: ShotFrameImageCreate,
+    db: AsyncSession = Depends(get_db),
+) -> ApiResponse[ShotFrameImageRead]:
+    if await db.get(ShotDetail, body.shot_detail_id) is None:
+        raise HTTPException(status_code=400, detail="ShotDetail not found")
+    obj = ShotFrameImage(**body.model_dump())
+    db.add(obj)
+    await db.flush()
+    await db.refresh(obj)
+    return success_response(ShotFrameImageRead.model_validate(obj), code=201)
+
+
+@frames_router.patch(
+    "/{image_id}",
+    response_model=ApiResponse[ShotFrameImageRead],
+    summary="更新镜头分镜帧图片",
+)
+async def update_shot_frame_image(
+    image_id: int,
+    body: ShotFrameImageUpdate,
+    db: AsyncSession = Depends(get_db),
+) -> ApiResponse[ShotFrameImageRead]:
+    obj = await db.get(ShotFrameImage, image_id)
+    if obj is None:
+        raise HTTPException(status_code=404, detail="ShotFrameImage not found")
+    update_data = body.model_dump(exclude_unset=True)
+    for k, v in update_data.items():
+        setattr(obj, k, v)
+    await db.flush()
+    await db.refresh(obj)
+    return success_response(ShotFrameImageRead.model_validate(obj))
+
+
+@frames_router.delete(
+    "/{image_id}",
+    response_model=ApiResponse[None],
+    summary="删除镜头分镜帧图片",
+)
+async def delete_shot_frame_image(
+    image_id: int,
+    db: AsyncSession = Depends(get_db),
+) -> ApiResponse[None]:
+    obj = await db.get(ShotFrameImage, image_id)
     if obj is None:
         return success_response(None)
     await db.delete(obj)

@@ -128,6 +128,14 @@ class AssetViewAngle(str, Enum):
     detail = "DETAIL"
 
 
+class ShotFrameType(str, Enum):
+    """镜头分镜帧类型：首帧/尾帧/关键帧。"""
+
+    first = "first"
+    last = "last"
+    key = "key"
+
+
 class FileType(str, Enum):
     """文件类型（用于素材库与时间线引用）。"""
 
@@ -521,8 +529,18 @@ class Shot(Base,TimestampMixin):
         comment="镜头状态",
     )
     script_excerpt: Mapped[str] = mapped_column(Text, nullable=False, default="", comment="剧本摘录")
+    generated_video_file_id: Mapped[str | None] = mapped_column(
+        String(64),
+        ForeignKey("files.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+        comment="已生成视频关联的文件 ID（FileItem，type=video）",
+    )
 
     chapter: Mapped["Chapter"] = relationship(back_populates="shots")
+    generated_video_file: Mapped["FileItem | None"] = relationship(
+        foreign_keys=[generated_video_file_id]
+    )
     detail: Mapped["ShotDetail"] = relationship(
         back_populates="shot",
         cascade="all, delete-orphan",
@@ -620,9 +638,24 @@ class ShotDetail(Base,TimestampMixin):
         comment="视效类型（存 code；展示可用 schemas.VFX_TYPE_ZH）",
     )
     vfx_note: Mapped[str] = mapped_column(Text, nullable=False, default="", comment="视效说明（简短可执行）")
+    first_frame_prompt: Mapped[str] = mapped_column(
+        Text, nullable=False, default="", comment="镜头分镜首帧提示词",
+    )
+    last_frame_prompt: Mapped[str] = mapped_column(
+        Text, nullable=False, default="", comment="镜头分镜尾帧提示词",
+    )
+    key_frame_prompt: Mapped[str] = mapped_column(
+        Text, nullable=False, default="", comment="镜头分镜关键帧提示词",
+    )
 
     shot: Mapped["Shot"] = relationship(back_populates="detail")
     scene: Mapped["Scene | None"] = relationship()
+    frame_images: Mapped[list["ShotFrameImage"]] = relationship(
+        back_populates="shot_detail",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        order_by="ShotFrameImage.id",
+    )
     dialog_lines: Mapped[list["ShotDialogLine"]] = relationship(
         back_populates="shot_detail",
         cascade="all, delete-orphan",
@@ -633,6 +666,47 @@ class ShotDetail(Base,TimestampMixin):
     __table_args__ = (
         Index("ix_shot_details_camera_shot", "camera_shot"),
         Index("ix_shot_details_angle", "angle"),
+    )
+
+
+class ShotFrameImage(Base, TimestampMixin):
+    """镜头分镜帧图片（首帧/尾帧/关键帧）。每镜头每类型一条记录，通过 file_id 关联 files 表。
+
+    应用层保证：
+    - 同一 shot_detail_id + frame_type 至多一条记录（表唯一约束）。
+    """
+
+    __tablename__ = "shot_frame_images"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True, comment="图片行 ID")
+    shot_detail_id: Mapped[str] = mapped_column(
+        String(64),
+        ForeignKey("shot_details.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+        comment="所属镜头细节 ID",
+    )
+    frame_type: Mapped[ShotFrameType] = mapped_column(
+        String(16),
+        nullable=False,
+        index=True,
+        comment="帧类型：first/last/key",
+    )
+    file_id: Mapped[str] = mapped_column(
+        String(64),
+        ForeignKey("files.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+        comment="关联的文件 ID（FileItem）",
+    )
+    width: Mapped[int | None] = mapped_column(Integer, nullable=True, comment="宽（px）")
+    height: Mapped[int | None] = mapped_column(Integer, nullable=True, comment="高（px）")
+    format: Mapped[str] = mapped_column(String(32), nullable=False, default="png", comment="格式")
+
+    shot_detail: Mapped["ShotDetail"] = relationship(back_populates="frame_images")
+
+    __table_args__ = (
+        UniqueConstraint("shot_detail_id", "frame_type", name="uq_shot_frame_images_detail_type"),
     )
 
 
@@ -776,10 +850,74 @@ class Character(Base, TimestampMixin):
         cascade="all, delete-orphan",
         passive_deletes=True,
     )
+    images: Mapped[list["CharacterImage"]] = relationship(
+        back_populates="character",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        order_by="CharacterImage.id",
+    )
 
     __table_args__ = (
         Index("ix_characters_name", "name"),
         UniqueConstraint("project_id", "name", name="uq_characters_project_name"),
+    )
+
+
+class CharacterImage(Base, TimestampMixin):
+    """角色图片（多角度/多精度）。归属角色；同一角色下至多一张 is_primary=True。
+
+    应用层保证：
+    - 同一 character_id 下至多一条 is_primary=True。
+    """
+
+    __tablename__ = "character_images"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True, comment="图片行 ID")
+    character_id: Mapped[str] = mapped_column(
+        String(64),
+        ForeignKey("characters.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+        comment="所属角色 ID",
+    )
+    file_id: Mapped[str] = mapped_column(
+        String(64),
+        ForeignKey("files.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+        comment="关联的文件 ID（FileItem）",
+    )
+    quality_level: Mapped[AssetQualityLevel] = mapped_column(
+        String(16),
+        nullable=False,
+        default=AssetQualityLevel.low,
+        index=True,
+        comment="精度等级",
+    )
+    view_angle: Mapped[AssetViewAngle] = mapped_column(
+        String(32),
+        nullable=False,
+        default=AssetViewAngle.front,
+        index=True,
+        comment="视角",
+    )
+    width: Mapped[int | None] = mapped_column(Integer, nullable=True, comment="宽（px）")
+    height: Mapped[int | None] = mapped_column(Integer, nullable=True, comment="高（px）")
+    format: Mapped[str] = mapped_column(String(32), nullable=False, default="png", comment="格式")
+    is_primary: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        comment="是否主图；应用层需保证同一角色下至多一张主图",
+    )
+
+    character: Mapped["Character"] = relationship(back_populates="images")
+
+    __table_args__ = (
+        UniqueConstraint(
+            "character_id", "quality_level", "view_angle",
+            name="uq_character_images_quality_angle",
+        ),
     )
 
 

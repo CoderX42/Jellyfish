@@ -4,8 +4,8 @@ import pytest
 from langchain_core.messages import AIMessage
 from langchain_core.runnables import RunnableLambda
 
-from app.core.skills_runtime import FilmEntityExtractor, FilmShotlistStoryboarder
-from app.core.skills_runtime.tasks import FilmEntityExtractionTask, FilmShotlistTask
+from app.chains.agents import FilmEntityExtractor, FilmShotlistStoryboarder
+from app.core.tasks.extra_tasks import FilmEntityExtractionTask, FilmShotlistTask
 
 
 def _mock_entity_response(_: object) -> AIMessage:

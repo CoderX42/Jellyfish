@@ -9,6 +9,7 @@ from app.models.studio import (
     CameraMovement,
     CameraShotType,
     DialogueLineMode,
+    ShotFrameType,
     ShotStatus,
     VFXType,
 )
@@ -22,6 +23,10 @@ class ShotBase(BaseModel):
     thumbnail: str = Field("", description="缩略图 URL/路径")
     status: ShotStatus = Field(ShotStatus.pending, description="镜头状态")
     script_excerpt: str = Field("", description="剧本摘录")
+    generated_video_file_id: str | None = Field(
+        None,
+        description="已生成视频关联的文件 ID（files.id，type=video）",
+    )
 
 
 class ShotCreate(ShotBase):
@@ -35,6 +40,7 @@ class ShotUpdate(BaseModel):
     thumbnail: str | None = None
     status: ShotStatus | None = None
     script_excerpt: str | None = None
+    generated_video_file_id: str | None = None
 
 
 class ShotRead(ShotBase):
@@ -55,6 +61,18 @@ class ShotDetailBase(BaseModel):
     has_bgm: bool = Field(False, description="是否包含 BGM")
     vfx_type: VFXType = Field(VFXType.none, description="视效类型")
     vfx_note: str = Field("", description="视效说明")
+    first_frame_prompt: str = Field(
+        "",
+        description="镜头分镜首帧提示词",
+    )
+    last_frame_prompt: str = Field(
+        "",
+        description="镜头分镜尾帧提示词",
+    )
+    key_frame_prompt: str = Field(
+        "",
+        description="镜头分镜关键帧提示词",
+    )
 
 
 class ShotDetailCreate(ShotDetailBase):
@@ -73,6 +91,9 @@ class ShotDetailUpdate(BaseModel):
     has_bgm: bool | None = None
     vfx_type: VFXType | None = None
     vfx_note: str | None = None
+    first_frame_prompt: str | None = None
+    last_frame_prompt: str | None = None
+    key_frame_prompt: str | None = None
 
 
 class ShotDetailRead(ShotDetailBase):
@@ -155,6 +176,38 @@ class ShotPropLinkRead(ShotLinkBase):
 class ShotCostumeLinkRead(ShotLinkBase):
     costume_id: str
 
+    class Config:
+        from_attributes = True
+
+
+class ShotFrameImageBase(BaseModel):
+    id: int = Field(..., description="图片行 ID")
+    shot_detail_id: str = Field(..., description="所属镜头细节 ID")
+    frame_type: ShotFrameType = Field(..., description="帧类型：first/last/key")
+    file_id: str = Field(..., description="关联的 FileItem ID")
+    width: int | None = Field(None, description="宽(px)")
+    height: int | None = Field(None, description="高(px)")
+    format: str = Field("png", description="格式")
+
+
+class ShotFrameImageCreate(BaseModel):
+    shot_detail_id: str
+    frame_type: ShotFrameType
+    file_id: str
+    width: int | None = None
+    height: int | None = None
+    format: str = "png"
+
+
+class ShotFrameImageUpdate(BaseModel):
+    frame_type: ShotFrameType | None = None
+    file_id: str | None = None
+    width: int | None = None
+    height: int | None = None
+    format: str | None = None
+
+
+class ShotFrameImageRead(ShotFrameImageBase):
     class Config:
         from_attributes = True
 

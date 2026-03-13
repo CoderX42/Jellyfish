@@ -12,6 +12,7 @@ from app.models.studio import (
     Actor,
     Chapter,
     Character,
+    CharacterImage,
     CharacterPropLink,
     Costume,
     Project,
@@ -34,12 +35,14 @@ from app.schemas.studio.cast import (
     ShotCharacterLinkRead,
     ShotCharacterLinkUpdate,
 )
+from app.schemas.studio.assets import AssetImageCreate, AssetImageUpdate, CharacterImageRead
 
 router = APIRouter()
 
 ACTOR_ORDER_FIELDS = {"name", "created_at", "updated_at"}
 CHARACTER_ORDER_FIELDS = {"name", "created_at", "updated_at"}
 LINK_ORDER_FIELDS = {"index", "id", "created_at", "updated_at"}
+IMAGE_ORDER_FIELDS = {"id", "quality_level", "view_angle", "created_at", "updated_at"}
 
 
 async def _ensure_project_exists(db: AsyncSession, project_id: str) -> None:
@@ -65,6 +68,23 @@ async def _ensure_prop_exists(db: AsyncSession, prop_id: str) -> None:
 async def _ensure_shot_exists(db: AsyncSession, shot_id: str) -> None:
     if await db.get(Shot, shot_id) is None:
         raise HTTPException(status_code=400, detail="Shot not found")
+
+
+async def _ensure_single_primary_character_image(
+    db: AsyncSession,
+    *,
+    character_id: str,
+    keep_id: int | None,
+) -> None:
+    """同一角色下只允许一张主图：把其他行 is_primary 置 false。"""
+    stmt = (
+        CharacterImage.__table__.update()
+        .where(CharacterImage.character_id == character_id)
+    )
+    if keep_id is not None:
+        stmt = stmt.where(CharacterImage.id != keep_id)
+    stmt = stmt.values(is_primary=False)
+    await db.execute(stmt)
 
 
 # ---------- Actor ----------
@@ -442,6 +462,118 @@ async def delete_shot_character_link(
 ) -> ApiResponse[None]:
     obj = await db.get(ShotCharacterLink, link_id)
     if obj is None:
+        return success_response(None)
+    await db.delete(obj)
+    await db.flush()
+    return success_response(None)
+
+
+# ---------- CharacterImage ----------
+
+
+@router.get(
+    "/characters/{character_id}/images",
+    response_model=ApiResponse[PaginatedData[CharacterImageRead]],
+    summary="角色图片列表（分页）",
+)
+async def list_character_images(
+    character_id: str,
+    db: AsyncSession = Depends(get_db),
+    order: str | None = Query(None),
+    is_desc: bool = Query(False),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(10, ge=1, le=100),
+) -> ApiResponse[PaginatedData[CharacterImageRead]]:
+    stmt = (
+        select(CharacterImage)
+        .where(CharacterImage.character_id == character_id)
+    )
+    stmt = apply_order(
+        stmt,
+        model=CharacterImage,
+        order=order,
+        is_desc=is_desc,
+        allow_fields=IMAGE_ORDER_FIELDS,
+        default="id",
+    )
+    items, total = await paginate(db, stmt=stmt, page=page, page_size=page_size)
+    return paginated_response(
+        [CharacterImageRead.model_validate(x) for x in items],
+        page=page,
+        page_size=page_size,
+        total=total,
+    )
+
+
+@router.post(
+    "/characters/{character_id}/images",
+    response_model=ApiResponse[CharacterImageRead],
+    status_code=status.HTTP_201_CREATED,
+    summary="创建角色图片",
+)
+async def create_character_image(
+    character_id: str,
+    body: AssetImageCreate,
+    db: AsyncSession = Depends(get_db),
+) -> ApiResponse[CharacterImageRead]:
+    parent = await db.get(Character, character_id)
+    if parent is None:
+        raise HTTPException(status_code=404, detail="Character not found")
+    obj = CharacterImage(character_id=character_id, **body.model_dump())
+    db.add(obj)
+    await db.flush()
+    await db.refresh(obj)
+    if obj.is_primary:
+        await _ensure_single_primary_character_image(
+            db,
+            character_id=character_id,
+            keep_id=obj.id,
+        )
+        await db.refresh(obj)
+    return success_response(CharacterImageRead.model_validate(obj), code=201)
+
+
+@router.patch(
+    "/characters/{character_id}/images/{image_id}",
+    response_model=ApiResponse[CharacterImageRead],
+    summary="更新角色图片",
+)
+async def update_character_image(
+    character_id: str,
+    image_id: int,
+    body: AssetImageUpdate,
+    db: AsyncSession = Depends(get_db),
+) -> ApiResponse[CharacterImageRead]:
+    obj = await db.get(CharacterImage, image_id)
+    if obj is None or obj.character_id != character_id:
+        raise HTTPException(status_code=404, detail="CharacterImage not found")
+    update_data = body.model_dump(exclude_unset=True)
+    for k, v in update_data.items():
+        setattr(obj, k, v)
+    await db.flush()
+    await db.refresh(obj)
+    if update_data.get("is_primary") is True:
+        await _ensure_single_primary_character_image(
+            db,
+            character_id=character_id,
+            keep_id=obj.id,
+        )
+        await db.refresh(obj)
+    return success_response(CharacterImageRead.model_validate(obj))
+
+
+@router.delete(
+    "/characters/{character_id}/images/{image_id}",
+    response_model=ApiResponse[None],
+    summary="删除角色图片",
+)
+async def delete_character_image(
+    character_id: str,
+    image_id: int,
+    db: AsyncSession = Depends(get_db),
+) -> ApiResponse[None]:
+    obj = await db.get(CharacterImage, image_id)
+    if obj is None or obj.character_id != character_id:
         return success_response(None)
     await db.delete(obj)
     await db.flush()

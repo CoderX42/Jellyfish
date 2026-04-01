@@ -72,11 +72,31 @@ pnpm run openapi:update
 Notes:
 
 - `openapi:update` fetches `http://127.0.0.1:8000/openapi.json` into `front/openapi.json`, then generates code under `front/src/services/generated/`.
-- To change the API base URL (default same-origin `/api`), call `initOpenAPI('http://127.0.0.1:8000')` at app bootstrap; see `front/src/services/openapi.ts`.
+- To change the API base URL, use `VITE_BACKEND_URL` (build-time) or inject `BACKEND_URL` at runtime (served as `/env.js` and loaded by `front/index.html`); see `front/src/services/openapi.ts`.
+
+## 🐳 Run with Docker Compose (MySQL + RustFS + Backend + Front)
+
+The repository ships a ready-to-run compose setup under `deploy/compose/`.
+
+### Ports
+
+- Frontend: `http://localhost:7788`
+- Backend: `http://localhost:8000` (Swagger at `/docs`)
+- MySQL: `localhost:${MYSQL_PORT:-3306}`
+- RustFS (S3 API): `http://localhost:${RUSTFS_PORT:-9000}` (Console: `http://localhost:${RUSTFS_CONSOLE_PORT:-9001}`)
+
+### Start
+
+```bash
+cp deploy/compose/.env.example deploy/compose/.env
+docker compose --env-file deploy/compose/.env -f deploy/compose/docker-compose.yml up --build
+```
+
+On the first start, `backend/init_db.py` will run once to create tables (`backend-init-db` service).
 
 ## 🚧 Development status / Roadmap
 
-The project is **actively developed**. Below is the current completion and planned work. Feedback and contributions via [Issues](https://github.com/your-org/jellyfish/issues) are welcome.
+The project is **actively developed**. Below is the current completion and planned work. Feedback and contributions via [Issues](https://github.com/Forget-C/Jellyfish/issues) are welcome.
 
 ### ✅ Done
 
@@ -98,7 +118,7 @@ The project is **actively developed**. Below is the current completion and plann
 
 ## Developer
 
-The project is still under development. Core workflows and data models have not yet stabilized. For now, we do not provide a deployment option, and we have temporarily paused PR submissions. We plan to reopen after the beta release in early April.
+The project is still under development and core workflows / data models may change. A Docker Compose setup is provided for local startup (see above).
 
 ## 📄 Open-source License / License
 
@@ -107,5 +127,5 @@ We welcome Pull Requests, Issues, and Stars, and we will work with the community
 
 ## 💬 Community & feedback
 
-- **[GitHub Issues](https://github.com/your-org/jellyfish/issues)** — Feature suggestions, bug reports, and usage discussions
+- **[GitHub Issues](https://github.com/Forget-C/Jellyfish/issues)** — Feature suggestions, bug reports, and usage discussions
 - **WeChat / Discord** — To be set up; we will update the entry on this page later

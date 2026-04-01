@@ -1,5 +1,13 @@
 import { OpenAPI } from './generated'
 
+declare global {
+  interface Window {
+    __ENV?: {
+      BACKEND_URL?: string
+    }
+  }
+}
+
 /**
  * 初始化由 OpenAPI 生成的请求客户端。
  *
@@ -11,5 +19,7 @@ export function initOpenAPI(base: string = '') {
   OpenAPI.BASE = base
 }
 
-initOpenAPI(import.meta.env.VITE_BACKEND_URL ?? '')
+const runtimeBackendUrl = window.__ENV?.BACKEND_URL
+const buildtimeBackendUrl = import.meta.env.VITE_BACKEND_URL
+initOpenAPI(runtimeBackendUrl ?? buildtimeBackendUrl ?? '')
 

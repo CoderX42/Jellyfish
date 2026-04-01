@@ -1,5 +1,7 @@
 """应用配置，从环境变量加载。"""
 
+import json
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -21,13 +23,21 @@ class Settings(BaseSettings):
     # Database
     database_url: str = "sqlite+aiosqlite:///./jellyfish.db"
 
-    # CORS：本地开发默认允许 Vite 常用端口
-    cors_origins: list[str] = [
-        "http://localhost:7788",
-        "http://127.0.0.1:7788",
-        "http://localhost:7788",
-        "http://127.0.0.1:7788",
-    ]
+    # CORS：环境变量中建议使用逗号分隔（更贴近 docker-compose 用法）
+    # 也兼容 JSON 数组：'["http://a","http://b"]'
+    cors_origins: str = "http://localhost:7788,http://127.0.0.1:7788"
+
+    @property
+    def cors_origins_list(self) -> list[str]:
+        s = (self.cors_origins or "").strip()
+        if not s:
+            return []
+        if s.startswith("["):
+            loaded = json.loads(s)
+            if isinstance(loaded, list):
+                return [str(x).strip() for x in loaded if str(x).strip()]
+            return []
+        return [x.strip() for x in s.split(",") if x.strip()]
 
     # S3 / 对象存储（用于素材文件）
     s3_endpoint_url: str | None = None

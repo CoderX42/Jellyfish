@@ -3,8 +3,9 @@ import { RiseOutlined, VideoCameraOutlined } from '@ant-design/icons'
 import { useNavigate, useParams } from 'react-router-dom'
 import { chapterStatusMap } from '../constants'
 import type { TabKey } from '../constants'
-import { getChapterStudioPath, getProjectChaptersPath, getProjectEditorPath } from '../routes'
+import { getProjectChaptersPath, getProjectEditorPath } from '../routes'
 import { useProject, useChapters } from '../hooks/useProjectData'
+import { ensureHasShotsBeforeShooting } from '../ensureHasShotsBeforeShooting'
 
 export function DashboardTab({ onSelectTab }: { onSelectTab: (tab: TabKey) => void }) {
   const navigate = useNavigate()
@@ -51,7 +52,12 @@ export function DashboardTab({ onSelectTab }: { onSelectTab: (tab: TabKey) => vo
               icon={<VideoCameraOutlined />}
               disabled={!latestChapter}
               onClick={() =>
-                projectId && latestChapter && navigate(getChapterStudioPath(projectId, latestChapter.id))
+                ensureHasShotsBeforeShooting({
+                  projectId,
+                  chapterId: latestChapter?.id,
+                  storyboardCount: latestChapter?.storyboardCount,
+                  navigate,
+                })
               }
             >
               继续拍摄
@@ -115,7 +121,14 @@ export function DashboardTab({ onSelectTab }: { onSelectTab: (tab: TabKey) => vo
                 hoverable
                 className="shrink-0 cursor-pointer"
                 style={{ width: 280 }}
-                onClick={() => projectId && navigate(getChapterStudioPath(projectId, ch.id))}
+                onClick={() =>
+                  ensureHasShotsBeforeShooting({
+                    projectId,
+                    chapterId: ch.id,
+                    storyboardCount: ch.storyboardCount,
+                    navigate,
+                  })
+                }
               >
                 <div className="font-medium truncate">
                   第{ch.index}集 {ch.title}

@@ -1,0 +1,95 @@
+services:
+  mysql:
+    image: mysql:9.0
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+    ports:
+      - "${MYSQL_PORT:-3306}:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$$MYSQL_ROOT_PASSWORD --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  rustfs:
+    image: rustfs/rustfs:latest
+    command: ["/data"]
+    environment:
+      RUSTFS_ACCESS_KEY: ${RUSTFS_ACCESS_KEY}
+      RUSTFS_SECRET_KEY: ${RUSTFS_SECRET_KEY}
+      RUSTFS_CONSOLE_ENABLE: "true"
+    ports:
+      - "${RUSTFS_PORT:-9000}:9000"
+      - "${RUSTFS_CONSOLE_PORT:-9001}:9001"
+    volumes:
+      - rustfs_data:/data
+
+  backend-init-db:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/backend.Dockerfile
+    environment:
+      DATABASE_URL: mysql+aiomysql://${MYSQL_USER}:${MYSQL_PASSWORD}@mysql:3306/${MYSQL_DATABASE}
+      DEBUG: "false"
+      # S3 / RustFS
+      S3_ENDPOINT_URL: http://rustfs:9000
+      S3_REGION_NAME: us-east-1
+      S3_ACCESS_KEY_ID: ${RUSTFS_ACCESS_KEY}
+      S3_SECRET_ACCESS_KEY: ${RUSTFS_SECRET_KEY}
+      S3_BUCKET_NAME: ${S3_BUCKET_NAME}
+      # CORS
+      CORS_ORIGINS: http://localhost:7788,http://127.0.0.1:7788
+      # 可选
+      OPENAI_API_KEY: ${OPENAI_API_KEY-}
+    depends_on:
+      mysql:
+        condition: service_healthy
+    command: ["uv", "run", "python", "init_db.py"]
+    restart: "no"
+
+  backend:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/backend.Dockerfile
+    environment:
+      DATABASE_URL: mysql+aiomysql://${MYSQL_USER}:${MYSQL_PASSWORD}@mysql:3306/${MYSQL_DATABASE}
+      DEBUG: "false"
+      API_V1_PREFIX: /api/v1
+      # S3 / RustFS
+      S3_ENDPOINT_URL: http://rustfs:9000
+      S3_REGION_NAME: us-east-1
+      S3_ACCESS_KEY_ID: ${RUSTFS_ACCESS_KEY}
+      S3_SECRET_ACCESS_KEY: ${RUSTFS_SECRET_KEY}
+      S3_BUCKET_NAME: ${S3_BUCKET_NAME}
+      # CORS
+      CORS_ORIGINS: http://localhost:7788,http://127.0.0.1:7788
+      # 可选
+      OPENAI_API_KEY: ${OPENAI_API_KEY-}
+    ports:
+      - "8000:8000"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      backend-init-db:
+        condition: service_completed_successfully
+
+  front:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/front.Dockerfile
+    environment:
+      BACKEND_URL: ${BACKEND_URL}
+    ports:
+      - "7788:80"
+    depends_on:
+      - backend
+
+volumes:
+  mysql_data:
+  rustfs_data:
+

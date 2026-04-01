@@ -72,12 +72,32 @@ pnpm run openapi:update
 说明：
 
 - `openapi:update` 会先拉取 `http://127.0.0.1:8000/openapi.json` 到 `front/openapi.json`，再生成代码到 `front/src/services/generated/`
-- 如需修改请求基础地址（默认同源 `/api`），可在应用启动处调用 `initOpenAPI('http://127.0.0.1:8000')`，配置文件见 `front/src/services/openapi.ts`
+- 如需修改请求基础地址，可配置 `VITE_BACKEND_URL`（构建时）或在部署时通过 `BACKEND_URL` 运行时注入（`front/index.html` 引入 `/env.js`），见 `front/src/services/openapi.ts`
+
+## 🐳 Docker 一键启动（MySQL + RustFS + Backend + Front）
+
+项目已提供开箱即用的 compose 编排，文件位于 `deploy/compose/`。
+
+### 端口
+
+- 前端：`http://localhost:7788`
+- 后端：`http://localhost:8000`（`/docs` 为 Swagger）
+- MySQL：`localhost:${MYSQL_PORT:-3306}`
+- RustFS（S3 API）：`http://localhost:${RUSTFS_PORT:-9000}`（Console：`http://localhost:${RUSTFS_CONSOLE_PORT:-9001}`）
+
+### 启动
+
+```bash
+cp deploy/compose/.env.example deploy/compose/.env
+docker compose --env-file deploy/compose/.env -f deploy/compose/docker-compose.yml up --build
+```
+
+首次启动会自动运行一次 `backend/init_db.py` 创建表结构（`backend-init-db` 服务）。
 
 
 ## 🚧 开发状态 / Roadmap
 
-项目处于**活跃开发中**，以下为当前功能完成度与规划进度。欢迎通过 [Issues](https://github.com/your-org/jellyfish/issues) 参与讨论与贡献。
+项目处于**活跃开发中**，以下为当前功能完成度与规划进度。欢迎通过 [Issues](https://github.com/Forget-C/Jellyfish/issues) 参与讨论与贡献。
 
 ### ✅ 已完成
 
@@ -98,7 +118,8 @@ pnpm run openapi:update
 | 高级提示词 | 分镜/角色/场景等高级提示词模板与智能填充（规划中） |
 
 ## 开发者
-项目仍处于开发阶段，核心流程与数据模型尚未稳定。因此目前暂不提供部署方式，并先暂停 PR 提交。预计 4 月初完成 beta 版本后开放。
+
+项目仍处于开发阶段，核心流程与数据模型尚未完全稳定；但已提供基于 Docker Compose 的本地启动方式（见上方）。
 
 ## 📄 开源协议 / License
 
@@ -107,5 +128,5 @@ pnpm run openapi:update
 
 ## 💬 交流与反馈 / Community
 
-- **[GitHub Issues](https://github.com/your-org/jellyfish/issues)** — 功能建议、Bug 反馈、使用讨论
+- **[GitHub Issues](https://github.com/Forget-C/Jellyfish/issues)** — 功能建议、Bug 反馈、使用讨论
 - **微信群 / Discord** — 待建设，后续会在本页更新入口

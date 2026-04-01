@@ -2272,8 +2272,6 @@ function Inspector(props: {
   const [hideShot, setHideShot] = useState(false)
   const [newDialogText, setNewDialogText] = useState('')
   const [creatingDialog, setCreatingDialog] = useState(false)
-  const [videoPromptFrameType, setVideoPromptFrameType] = useState<PromptFrameType>('key')
-  const [videoPromptGenerating, setVideoPromptGenerating] = useState(false)
   const [inspectorTabKey, setInspectorTabKey] = useState('camera')
   const [sceneNameMap, setSceneNameMap] = useState<Record<string, string>>({})
   const [characterNameMap, setCharacterNameMap] = useState<Record<string, string>>({})
@@ -2777,18 +2775,6 @@ function Inspector(props: {
     return shotDetail.key_frame_prompt ?? ''
   }
 
-  const patchPromptToDetailByType = (frameType: PromptFrameType, prompt: string) => {
-    if (frameType === 'first') {
-      onPatchShotDetail({ first_frame_prompt: prompt })
-      return
-    }
-    if (frameType === 'last') {
-      onPatchShotDetail({ last_frame_prompt: prompt })
-      return
-    }
-    onPatchShotDetail({ key_frame_prompt: prompt })
-  }
-
   const frameLabel: Record<PromptFrameType, string> = { first: '首帧', key: '关键帧', last: '尾帧' }
   const refFrameTypeOptions = useMemo(() => {
     const kinds = new Set((frameImages ?? []).map((x) => x.frame_type))
@@ -3166,61 +3152,6 @@ function Inspector(props: {
     void Promise.all([loadCardThumbs('first'), loadCardThumbs('key'), loadCardThumbs('last')])
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedShot?.id, frameImages.map((x) => `${x.id}:${x.file_id ?? ''}`).join('|')])
-
-  const handleGenerateVideoPrompt = async () => {
-    if (!selectedShot?.id) {
-      message.warning('请先选择一个分镜')
-      return
-    }
-
-    setVideoPromptGenerating(true)
-    try {
-      const created = await FilmService.createShotFramePromptTaskApiV1FilmTasksShotFramePromptsPost({
-        requestBody: {
-          shot_id: selectedShot.id,
-          frame_type: videoPromptFrameType,
-        },
-      })
-      const taskId = created.data?.task_id
-      if (!taskId) {
-        message.error('生成任务创建失败：缺少任务 ID')
-        return
-      }
-
-      let finalStatus = 'pending'
-      for (let i = 0; i < 30; i += 1) {
-        await sleep(2000)
-        const statusRes = await FilmService.getTaskStatusApiV1FilmTasksTaskIdStatusGet({ taskId })
-        const status = statusRes.data?.status
-        if (!status) continue
-        finalStatus = status
-        if (status === 'succeeded' || status === 'failed' || status === 'cancelled') break
-      }
-
-      if (finalStatus === 'succeeded') {
-        const resultRes = await FilmService.getTaskResultApiV1FilmTasksTaskIdResultGet({ taskId })
-        const result = (resultRes.data?.result ?? null) as Record<string, unknown> | null
-        const prompt = typeof result?.prompt === 'string' ? result.prompt : ''
-        if (!prompt.trim()) {
-          message.warning('生成完成，但未返回提示词')
-          return
-        }
-        patchPromptToDetailByType(videoPromptFrameType, prompt)
-        message.success('视频提示词已生成')
-        return
-      }
-
-      if (finalStatus === 'failed' || finalStatus === 'cancelled') {
-        message.error('视频提示词生成失败')
-      } else {
-        message.warning('生成任务仍在执行，请稍后重试')
-      }
-    } catch {
-      message.error('发起视频提示词生成失败')
-    } finally {
-      setVideoPromptGenerating(false)
-    }
-  }
 
   return (
     <div className="w-full h-full flex flex-col min-h-0">

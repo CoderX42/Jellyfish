@@ -28,9 +28,13 @@ class _FakeTaskManager:
 class _FakeDB:
     def __init__(self) -> None:
         self.added: list[object] = []
+        self.committed = False
 
     def add(self, obj: object) -> None:
         self.added.append(obj)
+
+    async def commit(self) -> None:
+        self.committed = True
 
 
 class _DummyLLM:
@@ -39,6 +43,10 @@ class _DummyLLM:
 
 def _close_task_stub(coro):
     coro.close()
+    return None
+
+
+async def _async_noop(*_args, **_kwargs) -> None:
     return None
 
 
@@ -62,6 +70,7 @@ def test_create_shot_frame_prompt_task_returns_created_envelope(client: TestClie
     monkeypatch.setattr(route, "build_shot_frame_prompt_run_args", _fake_build)
     monkeypatch.setattr(route, "TaskManager", _FakeTaskManager)
     monkeypatch.setattr(route.asyncio, "create_task", _close_task_stub)
+    monkeypatch.setattr(route, "mark_shot_generating", _async_noop)
     app.dependency_overrides[get_db] = _override_db(db)
     app.dependency_overrides[get_nothinking_llm] = _override_llm
     try:
@@ -77,6 +86,8 @@ def test_create_shot_frame_prompt_task_returns_created_envelope(client: TestClie
     assert body["code"] == 201
     assert body["message"] == "success"
     assert body["data"]["task_id"] == "prompt-task-1"
+    assert body["meta"] is None
+    assert db.committed is True
     assert len(db.added) == 1
 
 
@@ -104,6 +115,7 @@ def test_create_shot_frame_prompt_task_invalid_frame_type_returns_api_response(
         "code": 400,
         "message": "frame_type must be one of: first/last/key",
         "data": None,
+        "meta": None,
     }
 
 
@@ -127,7 +139,7 @@ def test_create_shot_frame_prompt_task_missing_shot_detail_returns_api_response(
         app.dependency_overrides.clear()
 
     assert response.status_code == 404
-    assert response.json() == {"code": 404, "message": "ShotDetail not found", "data": None}
+    assert response.json() == {"code": 404, "message": "ShotDetail not found", "data": None, "meta": None}
 
 
 def test_create_shot_frame_prompt_task_validation_error_returns_api_response(client: TestClient) -> None:

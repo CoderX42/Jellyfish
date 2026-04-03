@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.studio import Chapter, Character, Shot, ShotCharacterLink
 from app.schemas.studio.cast import ShotCharacterLinkCreate
 from app.services.common import create_and_refresh, entity_not_found, flush_and_refresh, require_entity
+from app.services.studio.shot_extracted_candidates import mark_linked_by_name, mark_pending_by_name
 
 
 async def list_by_shot(
@@ -53,7 +54,15 @@ async def upsert(
     if existing is not None:
         existing.index = body.index
         existing.note = body.note
-        return await flush_and_refresh(db, existing)
+        existing = await flush_and_refresh(db, existing)
+        await mark_linked_by_name(
+            db,
+            shot_id=body.shot_id,
+            candidate_type="character",
+            candidate_name=character.name,
+            linked_entity_id=body.character_id,
+        )
+        return existing
 
     existing_same_index_stmt = select(ShotCharacterLink).where(
         ShotCharacterLink.shot_id == body.shot_id,
@@ -61,9 +70,17 @@ async def upsert(
     )
     existing_same_index = (await db.execute(existing_same_index_stmt)).scalars().one_or_none()
     if existing_same_index is not None:
+        previous_character = await db.get(Character, existing_same_index.character_id)
         await db.execute(delete(ShotCharacterLink).where(ShotCharacterLink.id == existing_same_index.id))
+        if previous_character is not None and getattr(previous_character, "name", None):
+            await mark_pending_by_name(
+                db,
+                shot_id=body.shot_id,
+                candidate_type="character",
+                candidate_name=str(previous_character.name),
+            )
 
-    return await create_and_refresh(
+    row = await create_and_refresh(
         db,
         ShotCharacterLink(
             shot_id=body.shot_id,
@@ -72,3 +89,11 @@ async def upsert(
             note=body.note,
         ),
     )
+    await mark_linked_by_name(
+        db,
+        shot_id=body.shot_id,
+        candidate_type="character",
+        candidate_name=character.name,
+        linked_entity_id=body.character_id,
+    )
+    return row

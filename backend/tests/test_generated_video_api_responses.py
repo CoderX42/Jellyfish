@@ -37,6 +37,10 @@ class _FakeDB:
         self.committed = True
 
 
+async def _async_noop(*_args, **_kwargs) -> None:
+    return None
+
+
 def _close_task_stub(coro):
     coro.close()
     return None
@@ -103,7 +107,7 @@ def test_preview_video_generation_prompt_not_found_returns_api_response(
         app.dependency_overrides.clear()
 
     assert response.status_code == 404
-    assert response.json() == {"code": 404, "message": "Shot not found", "data": None}
+    assert response.json() == {"code": 404, "message": "Shot not found", "data": None, "meta": None}
 
 
 def test_create_video_generation_task_returns_created_envelope(client: TestClient, monkeypatch) -> None:
@@ -115,6 +119,7 @@ def test_create_video_generation_task_returns_created_envelope(client: TestClien
     monkeypatch.setattr(route, "build_run_args", _fake_build_run_args)
     monkeypatch.setattr(route, "TaskManager", _FakeTaskManager)
     monkeypatch.setattr(route.asyncio, "create_task", _close_task_stub)
+    monkeypatch.setattr(route, "mark_shot_generating", _async_noop)
     app.dependency_overrides[get_db] = _override_db(db)
     try:
         response = client.post(
@@ -135,6 +140,7 @@ def test_create_video_generation_task_returns_created_envelope(client: TestClien
     assert body["code"] == 201
     assert body["message"] == "success"
     assert body["data"]["task_id"] == "video-task-1"
+    assert body["meta"] is None
     assert db.committed is True
     assert len(db.added) == 1
 

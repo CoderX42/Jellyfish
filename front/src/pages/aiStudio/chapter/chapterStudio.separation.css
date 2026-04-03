@@ -39,6 +39,17 @@
 .cs-left {
   background: var(--cs-left-bg) !important;
   border-right: 1px solid var(--cs-divider);
+  display: flex !important;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+}
+
+.cs-left > .ant-layout-sider-children {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
 }
 
 .cs-main {
@@ -91,6 +102,15 @@
   color: var(--cs-text);
 }
 
+.cs-left-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
 /* Shot list item */
 .cs-shot-item {
   position: relative;
@@ -118,6 +138,44 @@
 }
 .cs-shot-item.cs-shot-active {
   box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.18);
+}
+
+.cs-shot-progress {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 18px;
+}
+
+.cs-shot-progress__dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.cs-shot-progress__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: #cbd5e1;
+  transition: background 120ms ease, transform 120ms ease;
+}
+
+.cs-shot-progress__dot.is-on {
+  background: var(--cs-primary);
+  transform: scale(1.08);
+}
+
+.cs-shot-progress__text {
+  font-size: 11px;
+  color: var(--cs-text-3);
+  letter-spacing: 0.02em;
+}
+
+.cs-shot-hint {
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--cs-text-3);
 }
 
 .cs-dot {

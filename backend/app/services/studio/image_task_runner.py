@@ -32,6 +32,7 @@ from app.services.studio.file_usages import (
     sync_usage_from_shot_context,
     upsert_file_usage,
 )
+from app.services.studio.shot_status import mark_shot_generating, recompute_shot_status
 from app.services.studio.image_tasks import load_provider_config, resolve_image_model
 from app.utils.files import create_file_from_url_or_b64
 from app.api.v1.routes.film.common import TaskCreated, _CreateOnlyTask
@@ -206,6 +207,21 @@ async def _persist_images_to_assets(
                 )
 
 
+async def _resolve_related_shot_id(
+    session: AsyncSession,
+    *,
+    relation_type: str,
+    relation_entity_id: str,
+) -> str | None:
+    """仅解析和镜头直接相关的生成任务。"""
+    if relation_type != "shot_frame_image":
+        return None
+    image_row = await session.get(ShotFrameImage, int(relation_entity_id))
+    if image_row is None:
+        return None
+    return image_row.shot_detail_id
+
+
 async def create_image_task_and_link(
     *,
     db: AsyncSession,
@@ -248,6 +264,13 @@ async def create_image_task_and_link(
             relation_entity_id=relation_entity_id,
         )
     )
+    related_shot_id = await _resolve_related_shot_id(
+        db,
+        relation_type=relation_type,
+        relation_entity_id=relation_entity_id,
+    )
+    if related_shot_id:
+        await mark_shot_generating(db, shot_id=related_shot_id)
     await db.commit()
 
     async def _runner(task_id: str, args: dict) -> None:
@@ -285,6 +308,13 @@ async def create_image_task_and_link(
                 )
                 await store.set_progress(task_id, 100)
                 await store.set_status(task_id, TaskStatus.succeeded)
+                related_shot_id = await _resolve_related_shot_id(
+                    session,
+                    relation_type=relation_type,
+                    relation_entity_id=relation_entity_id,
+                )
+                if related_shot_id:
+                    await recompute_shot_status(session, shot_id=related_shot_id)
                 await session.commit()
             except Exception as exc:  # noqa: BLE001
                 await session.rollback()
@@ -292,6 +322,13 @@ async def create_image_task_and_link(
                     store = SqlAlchemyTaskStore(s2)
                     await store.set_error(task_id, str(exc))
                     await store.set_status(task_id, TaskStatus.failed)
+                    related_shot_id = await _resolve_related_shot_id(
+                        s2,
+                        relation_type=relation_type,
+                        relation_entity_id=relation_entity_id,
+                    )
+                    if related_shot_id:
+                        await recompute_shot_status(s2, shot_id=related_shot_id)
                     await s2.commit()
 
     asyncio.create_task(_runner(task_record.id, run_args))

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -12,6 +13,8 @@ from app.models.studio import (
     CameraShotType,
     DialogueLineMode,
     ShotFrameType,
+    ShotCandidateStatus,
+    ShotCandidateType,
     ShotStatus,
     VFXType,
 )
@@ -24,6 +27,7 @@ class ShotBase(BaseModel):
     title: str = Field(..., description="镜头标题")
     thumbnail: str = Field("", description="缩略图 URL/路径")
     status: ShotStatus = Field(ShotStatus.pending, description="镜头状态")
+    skip_extraction: bool = Field(False, description="是否明确跳过信息提取")
     script_excerpt: str = Field("", description="剧本摘录")
     generated_video_file_id: str | None = Field(
         None,
@@ -41,12 +45,37 @@ class ShotUpdate(BaseModel):
     title: str | None = None
     thumbnail: str | None = None
     status: ShotStatus | None = None
+    skip_extraction: bool | None = None
     script_excerpt: str | None = None
     generated_video_file_id: str | None = None
 
 
 class ShotRead(ShotBase):
     model_config = ConfigDict(from_attributes=True)
+
+
+class ShotSkipExtractionUpdate(BaseModel):
+    skip: bool = Field(..., description="是否明确跳过信息提取")
+
+
+class ShotExtractedCandidateLinkRequest(BaseModel):
+    linked_entity_id: str = Field(..., description="确认关联到的实体 ID")
+
+
+class ShotExtractedCandidateRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int = Field(..., description="候选项 ID")
+    shot_id: str = Field(..., description="所属镜头 ID")
+    candidate_type: ShotCandidateType = Field(..., description="候选类型")
+    candidate_name: str = Field(..., description="提取出的候选名称")
+    candidate_status: ShotCandidateStatus = Field(..., description="候选确认状态")
+    linked_entity_id: str | None = Field(None, description="已关联实体 ID")
+    source: str = Field(..., description="候选来源")
+    payload: dict = Field(default_factory=dict, description="候选附加信息")
+    confirmed_at: datetime | None = Field(None, description="确认时间")
+    created_at: datetime = Field(..., description="创建时间")
+    updated_at: datetime = Field(..., description="更新时间")
 
 
 class ShotDetailBase(BaseModel):

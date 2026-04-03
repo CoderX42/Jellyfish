@@ -5,7 +5,18 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.core.db import Base
-from app.models.studio import Chapter, Character, Project, ProjectStyle, ProjectVisualStyle, Shot, ShotCharacterLink
+from app.models.studio import (
+    Chapter,
+    Character,
+    Project,
+    ProjectStyle,
+    ProjectVisualStyle,
+    Shot,
+    ShotCandidateStatus,
+    ShotCandidateType,
+    ShotCharacterLink,
+    ShotExtractedCandidate,
+)
 from app.schemas.studio.cast import ShotCharacterLinkCreate
 from app.services.studio.shot_character_links import list_by_shot, upsert
 
@@ -123,4 +134,78 @@ async def test_upsert_replaces_existing_same_index_link() -> None:
         assert len(listed) == 1
         assert listed[0].character_id == "char2"
         assert listed[0].note == "second"
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_upsert_replaces_existing_same_index_link_marks_previous_candidate_back_to_pending() -> None:
+    db, engine = await _build_session()
+    async with db:
+        await _seed_base_graph(db)
+        candidate_1 = ShotExtractedCandidate(
+            shot_id="s1",
+            candidate_type=ShotCandidateType.character,
+            candidate_name="角色一",
+            candidate_status=ShotCandidateStatus.pending,
+            source="extraction",
+            payload={},
+        )
+        candidate_2 = ShotExtractedCandidate(
+            shot_id="s1",
+            candidate_type=ShotCandidateType.character,
+            candidate_name="角色二",
+            candidate_status=ShotCandidateStatus.pending,
+            source="extraction",
+            payload={},
+        )
+        db.add_all([candidate_1, candidate_2])
+        await db.flush()
+
+        await upsert(
+            db,
+            body=ShotCharacterLinkCreate(shot_id="s1", character_id="char1", index=1, note="first"),
+        )
+        await upsert(
+            db,
+            body=ShotCharacterLinkCreate(shot_id="s1", character_id="char2", index=1, note="second"),
+        )
+
+        refreshed_1 = await db.get(ShotExtractedCandidate, candidate_1.id)
+        refreshed_2 = await db.get(ShotExtractedCandidate, candidate_2.id)
+        assert refreshed_1 is not None
+        assert refreshed_2 is not None
+        assert refreshed_1.candidate_status == ShotCandidateStatus.pending
+        assert refreshed_1.linked_entity_id is None
+        assert refreshed_1.confirmed_at is None
+        assert refreshed_2.candidate_status == ShotCandidateStatus.linked
+        assert refreshed_2.linked_entity_id == "char2"
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_upsert_marks_matching_character_candidate_as_linked() -> None:
+    db, engine = await _build_session()
+    async with db:
+        await _seed_base_graph(db)
+        candidate = ShotExtractedCandidate(
+            shot_id="s1",
+            candidate_type=ShotCandidateType.character,
+            candidate_name="角色一",
+            candidate_status=ShotCandidateStatus.pending,
+            source="extraction",
+            payload={},
+        )
+        db.add(candidate)
+        await db.flush()
+
+        await upsert(
+            db,
+            body=ShotCharacterLinkCreate(shot_id="s1", character_id="char1", index=0, note="linked"),
+        )
+
+        refreshed = await db.get(ShotExtractedCandidate, candidate.id)
+        assert refreshed is not None
+        assert refreshed.candidate_status == ShotCandidateStatus.linked
+        assert refreshed.linked_entity_id == "char1"
+        assert refreshed.confirmed_at is not None
     await engine.dispose()

@@ -16,6 +16,7 @@ from app.core.task_manager import SqlAlchemyTaskStore
 from app.core.task_manager.types import TaskStatus
 from app.models.studio import Chapter, Shot, ShotDetail
 from app.services.common import entity_not_found, invalid_choice
+from app.services.studio import recompute_shot_status
 
 
 def normalize_frame_type(frame_type: str) -> str:
@@ -123,6 +124,7 @@ async def run_shot_frame_prompt_task(
             await store.set_result(task_id, result.model_dump())
             await store.set_progress(task_id, 100)
             await store.set_status(task_id, TaskStatus.succeeded)
+            await recompute_shot_status(session, shot_id=shot_id)
             await session.commit()
         except Exception as exc:  # noqa: BLE001
             await session.rollback()
@@ -130,4 +132,7 @@ async def run_shot_frame_prompt_task(
                 store = SqlAlchemyTaskStore(s2)
                 await store.set_error(task_id, str(exc))
                 await store.set_status(task_id, TaskStatus.failed)
+                shot_id = str(run_args.get("shot_id") or "")
+                if shot_id:
+                    await recompute_shot_status(s2, shot_id=shot_id)
                 await s2.commit()

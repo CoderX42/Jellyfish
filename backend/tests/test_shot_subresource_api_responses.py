@@ -230,7 +230,7 @@ def test_get_shot_detail_not_found_returns_api_response(client: TestClient) -> N
         app.dependency_overrides.clear()
 
     assert response.status_code == 404
-    assert response.json() == {"code": 404, "message": "ShotDetail not found", "data": None}
+    assert response.json() == {"code": 404, "message": "ShotDetail not found", "data": None, "meta": None}
 
 
 def test_delete_shot_detail_returns_empty_envelope(client: TestClient) -> None:
@@ -244,7 +244,7 @@ def test_delete_shot_detail_returns_empty_envelope(client: TestClient) -> None:
         app.dependency_overrides.clear()
 
     assert response.status_code == 200
-    assert response.json() == {"code": 200, "message": "success", "data": None}
+    assert response.json() == {"code": 200, "message": "success", "data": None, "meta": None}
     assert "shot-1" not in db.shot_details
 
 
@@ -289,7 +289,7 @@ def test_update_shot_dialog_line_not_found_returns_api_response(client: TestClie
         app.dependency_overrides.clear()
 
     assert response.status_code == 404
-    assert response.json() == {"code": 404, "message": "ShotDialogLine not found", "data": None}
+    assert response.json() == {"code": 404, "message": "ShotDialogLine not found", "data": None, "meta": None}
 
 
 def test_delete_shot_dialog_line_returns_empty_envelope(client: TestClient) -> None:
@@ -317,7 +317,7 @@ def test_delete_shot_dialog_line_returns_empty_envelope(client: TestClient) -> N
         app.dependency_overrides.clear()
 
     assert response.status_code == 200
-    assert response.json() == {"code": 200, "message": "success", "data": None}
+    assert response.json() == {"code": 200, "message": "success", "data": None, "meta": None}
     assert 1 not in db.dialog_lines
 
 
@@ -360,7 +360,7 @@ def test_update_shot_frame_image_not_found_returns_api_response(client: TestClie
         app.dependency_overrides.clear()
 
     assert response.status_code == 404
-    assert response.json() == {"code": 404, "message": "ShotFrameImage not found", "data": None}
+    assert response.json() == {"code": 404, "message": "ShotFrameImage not found", "data": None, "meta": None}
 
 
 def test_delete_shot_frame_image_returns_empty_envelope(client: TestClient) -> None:
@@ -386,7 +386,7 @@ def test_delete_shot_frame_image_returns_empty_envelope(client: TestClient) -> N
         app.dependency_overrides.clear()
 
     assert response.status_code == 200
-    assert response.json() == {"code": 200, "message": "success", "data": None}
+    assert response.json() == {"code": 200, "message": "success", "data": None, "meta": None}
     assert 1 not in db.frame_images
 
 

@@ -46,6 +46,7 @@ from app.services.script_extraction_cache import (
     set_cached_script_extract,
 )
 from app.services.studio.script_division import write_division_result_to_chapter
+from app.services.studio import sync_shot_extracted_candidates_from_draft
 
 logger = logging.getLogger(__name__)
 
@@ -537,6 +538,7 @@ class ScriptExtractRequest(BaseModel):
 async def extract_script(
     request: ScriptExtractRequest,
     llm: BaseChatModel = Depends(get_nothinking_llm),
+    db: AsyncSession = Depends(get_db),
 ) -> ApiResponse[StudioScriptExtractionDraft]:
     try:
         cache_key = build_script_extract_cache_key(
@@ -548,6 +550,12 @@ async def extract_script(
         if not request.refresh_cache:
             cached = get_cached_script_extract(cache_key)
             if cached is not None:
+                await sync_shot_extracted_candidates_from_draft(
+                    db,
+                    chapter_id=request.chapter_id,
+                    draft=cached,
+                )
+                await db.commit()
                 return success_response(data=cached, meta={"from_cache": True})
 
         agent = ElementExtractorAgent(llm)
@@ -558,6 +566,12 @@ async def extract_script(
             consistency_json=json.dumps(request.consistency or {}, ensure_ascii=False),
         )
         set_cached_script_extract(cache_key, result)
+        await sync_shot_extracted_candidates_from_draft(
+            db,
+            chapter_id=request.chapter_id,
+            draft=result,
+        )
+        await db.commit()
         return success_response(data=result, meta={"from_cache": False})
     except Exception as e:
         logger.error(f"Script extraction failed: {e}")

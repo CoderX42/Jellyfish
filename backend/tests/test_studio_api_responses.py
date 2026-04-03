@@ -182,7 +182,7 @@ def test_get_project_not_found_returns_api_response(client: TestClient) -> None:
         app.dependency_overrides.clear()
 
     assert response.status_code == 404
-    assert response.json() == {"code": 404, "message": "Project not found", "data": None}
+    assert response.json() == {"code": 404, "message": "Project not found", "data": None, "meta": None}
 
 
 def test_delete_project_returns_empty_envelope(client: TestClient) -> None:
@@ -195,7 +195,7 @@ def test_delete_project_returns_empty_envelope(client: TestClient) -> None:
         app.dependency_overrides.clear()
 
     assert response.status_code == 200
-    assert response.json() == {"code": 200, "message": "success", "data": None}
+    assert response.json() == {"code": 200, "message": "success", "data": None, "meta": None}
     assert "proj-delete" not in db.projects
 
 
@@ -250,7 +250,7 @@ def test_create_chapter_missing_project_returns_api_response(client: TestClient)
         app.dependency_overrides.clear()
 
     assert response.status_code == 400
-    assert response.json() == {"code": 400, "message": "Project not found", "data": None}
+    assert response.json() == {"code": 400, "message": "Project not found", "data": None, "meta": None}
 
 
 def test_get_chapter_not_found_returns_api_response(client: TestClient) -> None:
@@ -262,7 +262,7 @@ def test_get_chapter_not_found_returns_api_response(client: TestClient) -> None:
         app.dependency_overrides.clear()
 
     assert response.status_code == 404
-    assert response.json() == {"code": 404, "message": "Chapter not found", "data": None}
+    assert response.json() == {"code": 404, "message": "Chapter not found", "data": None, "meta": None}
 
 
 def test_create_shot_returns_created_envelope(client: TestClient) -> None:
@@ -303,7 +303,7 @@ def test_get_shot_not_found_returns_api_response(client: TestClient) -> None:
         app.dependency_overrides.clear()
 
     assert response.status_code == 404
-    assert response.json() == {"code": 404, "message": "Shot not found", "data": None}
+    assert response.json() == {"code": 404, "message": "Shot not found", "data": None, "meta": None}
 
 
 def test_delete_shot_returns_empty_envelope(client: TestClient) -> None:
@@ -318,7 +318,7 @@ def test_delete_shot_returns_empty_envelope(client: TestClient) -> None:
         app.dependency_overrides.clear()
 
     assert response.status_code == 200
-    assert response.json() == {"code": 200, "message": "success", "data": None}
+    assert response.json() == {"code": 200, "message": "success", "data": None, "meta": None}
     assert "shot-delete" not in db.shots
 
 

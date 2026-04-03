@@ -33,6 +33,7 @@ from app.schemas.studio.shots import (
 )
 from app.services.common import delete_if_exists, entity_not_found, invalid_choice, require_entity
 from app.services.studio.entity_specs import entity_spec, normalize_entity_type
+from app.services.studio.shot_extracted_candidates import mark_linked_by_name, mark_pending_by_name
 from app.services.studio.entity_thumbnails import resolve_thumbnail_infos, resolve_thumbnails
 from app.utils.project_links import upsert_project_link
 
@@ -89,7 +90,8 @@ async def create_project_asset_link(
         detail=spec["not_found"],
         status_code=400,
     )
-    return await upsert_project_link(
+    asset_obj = await db.get(spec["asset_model"], body.asset_id)
+    row = await upsert_project_link(
         db,
         model=spec["model"],
         asset_field=spec["field"],
@@ -98,6 +100,16 @@ async def create_project_asset_link(
         chapter_id=body.chapter_id,
         shot_id=body.shot_id,
     )
+    candidate_type = {"scene": "scene", "prop": "prop", "costume": "costume"}.get(entity_type)
+    if body.shot_id and candidate_type and asset_obj is not None and getattr(asset_obj, "name", None):
+        await mark_linked_by_name(
+            db,
+            shot_id=body.shot_id,
+            candidate_type=candidate_type,
+            candidate_name=str(asset_obj.name),
+            linked_entity_id=body.asset_id,
+        )
+    return row
 
 
 async def delete_project_asset_link(
@@ -108,7 +120,21 @@ async def delete_project_asset_link(
 ) -> None:
     """删除项目-章节-镜头-资产关联。"""
     spec = _link_spec(entity_type)
+    row = await db.get(spec["model"], link_id)
+    if row is None:
+        return
+    shot_id = getattr(row, "shot_id", None)
+    asset_id = getattr(row, spec["field"], None)
+    asset_obj = await db.get(spec["asset_model"], asset_id) if asset_id else None
     await delete_if_exists(db, spec["model"], link_id)
+    candidate_type = {"scene": "scene", "prop": "prop", "costume": "costume"}.get(entity_type)
+    if shot_id and candidate_type and asset_obj is not None and getattr(asset_obj, "name", None):
+        await mark_pending_by_name(
+            db,
+            shot_id=str(shot_id),
+            candidate_type=candidate_type,
+            candidate_name=str(asset_obj.name),
+        )
 
 
 async def list_shot_linked_assets_paginated(

@@ -40,6 +40,12 @@ from app.services.studio.shots import (
     list_paginated as list_shots_paginated,
     update as update_shot_service,
 )
+from app.services.studio import (
+    ignore_shot_extracted_candidate,
+    link_shot_extracted_candidate,
+    list_shot_extracted_candidates,
+    set_skip_extraction,
+)
 from app.schemas.common import ApiResponse, PaginatedData, created_response, empty_response, success_response
 from app.schemas.skills.script_processing import StudioScriptExtractionDraft
 from app.services.studio.shot_extraction_draft import build_script_extraction_draft_for_shot
@@ -62,6 +68,9 @@ from app.schemas.studio.shots import (
     ShotFrameImageCreate,
     ShotFrameImageRead,
     ShotFrameImageUpdate,
+    ShotExtractedCandidateLinkRequest,
+    ShotExtractedCandidateRead,
+    ShotSkipExtractionUpdate,
 )
 
 router = APIRouter()
@@ -131,6 +140,64 @@ async def get_shot_extraction_draft(
 ) -> ApiResponse[StudioScriptExtractionDraft]:
     data = await build_script_extraction_draft_for_shot(db, shot_id)
     return success_response(data)
+
+
+@router.get(
+    "/{shot_id}/extracted-candidates",
+    response_model=ApiResponse[list[ShotExtractedCandidateRead]],
+    summary="获取镜头提取候选项",
+)
+async def get_shot_extracted_candidates(
+    shot_id: str,
+    db: AsyncSession = Depends(get_db),
+) -> ApiResponse[list[ShotExtractedCandidateRead]]:
+    rows = await list_shot_extracted_candidates(db, shot_id=shot_id)
+    return success_response([ShotExtractedCandidateRead.model_validate(row) for row in rows])
+
+
+@router.patch(
+    "/{shot_id}/skip-extraction",
+    response_model=ApiResponse[ShotRead],
+    summary="设置是否跳过镜头信息提取",
+)
+async def update_shot_skip_extraction(
+    shot_id: str,
+    body: ShotSkipExtractionUpdate,
+    db: AsyncSession = Depends(get_db),
+) -> ApiResponse[ShotRead]:
+    shot = await set_skip_extraction(db, shot_id=shot_id, skip=body.skip)
+    return success_response(ShotRead.model_validate(shot))
+
+
+@router.patch(
+    "/extracted-candidates/{candidate_id}/link",
+    response_model=ApiResponse[ShotExtractedCandidateRead],
+    summary="确认并关联镜头提取候选项",
+)
+async def link_extracted_candidate(
+    candidate_id: int,
+    body: ShotExtractedCandidateLinkRequest,
+    db: AsyncSession = Depends(get_db),
+) -> ApiResponse[ShotExtractedCandidateRead]:
+    row = await link_shot_extracted_candidate(
+        db,
+        candidate_id=candidate_id,
+        linked_entity_id=body.linked_entity_id,
+    )
+    return success_response(ShotExtractedCandidateRead.model_validate(row))
+
+
+@router.patch(
+    "/extracted-candidates/{candidate_id}/ignore",
+    response_model=ApiResponse[ShotExtractedCandidateRead],
+    summary="忽略镜头提取候选项",
+)
+async def ignore_extracted_candidate(
+    candidate_id: int,
+    db: AsyncSession = Depends(get_db),
+) -> ApiResponse[ShotExtractedCandidateRead]:
+    row = await ignore_shot_extracted_candidate(db, candidate_id=candidate_id)
+    return success_response(ShotExtractedCandidateRead.model_validate(row))
 
 
 @router.get(

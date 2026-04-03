@@ -64,6 +64,20 @@ from app.services.studio.shot_frames import (
     list_paginated as list_shot_frame_images_paginated,
     update as update_shot_frame_image,
 )
+from app.services.studio.shot_extracted_candidates import (
+    list_by_shot as list_shot_extracted_candidates,
+    mark_ignored as ignore_shot_extracted_candidate,
+    mark_linked as link_shot_extracted_candidate,
+    mark_linked_by_name as link_shot_extracted_candidate_by_name,
+    replace_for_shot as replace_shot_extracted_candidates,
+    set_skip_extraction,
+    sync_from_extraction_draft as sync_shot_extracted_candidates_from_draft,
+)
+from app.services.studio.shot_status import (
+    has_active_generation_tasks,
+    mark_shot_generating,
+    recompute_shot_status,
+)
 from app.services.studio.entities import (
     StudioEntitiesService,
 )
@@ -112,9 +126,19 @@ __all__ = [
     "list_shot_details_paginated",
     "list_shot_dialog_lines_paginated",
     "list_shot_frame_images_paginated",
+    "list_shot_extracted_candidates",
     "list_shot_linked_assets_paginated",
     "list_shots_paginated",
+    "link_shot_extracted_candidate",
+    "link_shot_extracted_candidate_by_name",
+    "ignore_shot_extracted_candidate",
+    "replace_shot_extracted_candidates",
+    "set_skip_extraction",
+    "sync_shot_extracted_candidates_from_draft",
+    "has_active_generation_tasks",
+    "mark_shot_generating",
     "normalize_entity_type",
+    "recompute_shot_status",
     "resolve_thumbnails",
     "resolve_thumbnail_infos",
     "resolve_reference_file_ids_and_names_from_linked_items",

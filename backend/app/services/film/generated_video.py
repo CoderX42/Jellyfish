@@ -23,6 +23,7 @@ from app.models.studio import FileItem, Shot, ShotDetail, ShotFrameImage, ShotFr
 from app.models.types import FileUsageKind
 from app.services.common import entity_not_found
 from app.services.studio.file_usages import sync_usage_from_shot_context
+from app.services.studio import recompute_shot_status
 from app.utils.files import create_file_from_url_or_b64
 
 REQUIRED_FRAMES_BY_MODE: dict[str, tuple[ShotFrameType, ...]] = {
@@ -343,6 +344,7 @@ async def run_video_generation_task(
             await store.set_result(task_id, result_payload)
             await store.set_progress(task_id, 100)
             await store.set_status(task_id, TaskStatus.succeeded)
+            await recompute_shot_status(session, shot_id=shot_id)
             await session.commit()
         except Exception as exc:  # noqa: BLE001
             await session.rollback()
@@ -350,4 +352,7 @@ async def run_video_generation_task(
                 store = SqlAlchemyTaskStore(s2)
                 await store.set_error(task_id, str(exc))
                 await store.set_status(task_id, TaskStatus.failed)
+                shot_id = str(run_args.get("shot_id") or "")
+                if shot_id:
+                    await recompute_shot_status(s2, shot_id=shot_id)
                 await s2.commit()

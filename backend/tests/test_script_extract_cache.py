@@ -25,10 +25,23 @@ def _build_result() -> StudioScriptExtractionDraft:
     )
 
 
+class _FakeDB:
+    def __init__(self) -> None:
+        self.committed = False
+
+    async def commit(self) -> None:
+        self.committed = True
+
+
+async def _async_noop(*_args, **_kwargs) -> None:
+    return None
+
+
 @pytest.mark.asyncio
 async def test_extract_script_uses_cache_by_default(monkeypatch):
     clear_script_extract_cache()
     calls: list[str] = []
+    db = _FakeDB()
 
     class _FakeAgent:
         def __init__(self, _llm):
@@ -39,6 +52,7 @@ async def test_extract_script_uses_cache_by_default(monkeypatch):
             return _build_result()
 
     monkeypatch.setattr(route, "ElementExtractorAgent", _FakeAgent)
+    monkeypatch.setattr(route, "sync_shot_extracted_candidates_from_draft", _async_noop)
 
     request = route.ScriptExtractRequest(
         project_id="project-1",
@@ -48,8 +62,8 @@ async def test_extract_script_uses_cache_by_default(monkeypatch):
         refresh_cache=False,
     )
 
-    first = await route.extract_script(request, llm=None)
-    second = await route.extract_script(request, llm=None)
+    first = await route.extract_script(request, llm=None, db=db)
+    second = await route.extract_script(request, llm=None, db=db)
 
     assert first.data is not None
     assert second.data is not None
@@ -62,6 +76,7 @@ async def test_extract_script_uses_cache_by_default(monkeypatch):
 async def test_extract_script_refresh_cache_forces_recompute(monkeypatch):
     clear_script_extract_cache()
     calls: list[str] = []
+    db = _FakeDB()
 
     class _FakeAgent:
         def __init__(self, _llm):
@@ -72,6 +87,7 @@ async def test_extract_script_refresh_cache_forces_recompute(monkeypatch):
             return _build_result()
 
     monkeypatch.setattr(route, "ElementExtractorAgent", _FakeAgent)
+    monkeypatch.setattr(route, "sync_shot_extracted_candidates_from_draft", _async_noop)
 
     request = route.ScriptExtractRequest(
         project_id="project-1",
@@ -82,8 +98,8 @@ async def test_extract_script_refresh_cache_forces_recompute(monkeypatch):
     )
     refresh_request = request.model_copy(update={"refresh_cache": True})
 
-    await route.extract_script(request, llm=None)
-    refreshed = await route.extract_script(refresh_request, llm=None)
+    await route.extract_script(request, llm=None, db=db)
+    refreshed = await route.extract_script(refresh_request, llm=None, db=db)
 
     assert refreshed.meta == {"from_cache": False}
     assert len(calls) == 2

@@ -10,6 +10,7 @@ from app.core.task_manager import DeliveryMode, SqlAlchemyTaskStore, TaskManager
 from app.dependencies import get_db
 from app.models.task_links import GenerationTaskLink
 from app.services.film.generated_video import build_run_args, preview_prompt_and_images, run_video_generation_task
+from app.services.studio import mark_shot_generating
 from app.schemas.common import ApiResponse, created_response, success_response
 
 from .common import TaskCreated, _CreateOnlyTask
@@ -80,6 +81,7 @@ async def create_video_generation_task(
             relation_entity_id=body.shot_id,
         )
     )
+    await mark_shot_generating(db, shot_id=body.shot_id)
 
     # 确保任务记录已提交，避免后台 runner 新 session 查询不到任务行而无法更新状态。
     await db.commit()

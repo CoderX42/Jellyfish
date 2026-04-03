@@ -15,6 +15,7 @@ from app.services.film.shot_frame_prompt_tasks import (
     relation_type_for_frame,
     run_shot_frame_prompt_task,
 )
+from app.services.studio import mark_shot_generating
 
 from .common import (
     ShotFramePromptRequest,
@@ -55,6 +56,8 @@ async def create_shot_frame_prompt_task(
             relation_entity_id=body.shot_id,
         )
     )
+    await mark_shot_generating(db, shot_id=body.shot_id)
+    await db.commit()
 
     asyncio.create_task(run_shot_frame_prompt_task(task_id=task_record.id, run_args=run_args, llm=llm))
     return created_response(TaskCreated(task_id=task_record.id))

@@ -21,6 +21,7 @@ from app.services.common import (
     require_entity,
     require_optional_entity,
 )
+from app.services.studio.shot_extracted_candidates import mark_linked_by_name, mark_pending_by_linked_entity
 
 
 async def list_paginated(
@@ -84,10 +85,34 @@ async def update(
     """更新镜头细节。"""
     obj = await get_or_404(db, ShotDetail, shot_id, detail=entity_not_found("ShotDetail"))
     update_data = body.model_dump(exclude_unset=True)
+    old_scene_id = obj.scene_id
+    scene_obj = None
     if "scene_id" in update_data:
-        await require_optional_entity(db, Scene, update_data["scene_id"], detail=entity_not_found("Scene"), status_code=400)
+        scene_obj = await require_optional_entity(
+            db,
+            Scene,
+            update_data["scene_id"],
+            detail=entity_not_found("Scene"),
+            status_code=400,
+        )
     patch_model(obj, update_data)
-    return await flush_and_refresh(db, obj)
+    obj = await flush_and_refresh(db, obj)
+    if "scene_id" in update_data and old_scene_id and old_scene_id != obj.scene_id:
+        await mark_pending_by_linked_entity(
+            db,
+            shot_id=shot_id,
+            candidate_type="scene",
+            linked_entity_id=old_scene_id,
+        )
+    if scene_obj is not None:
+        await mark_linked_by_name(
+            db,
+            shot_id=shot_id,
+            candidate_type="scene",
+            candidate_name=scene_obj.name,
+            linked_entity_id=scene_obj.id,
+        )
+    return obj
 
 
 async def delete(

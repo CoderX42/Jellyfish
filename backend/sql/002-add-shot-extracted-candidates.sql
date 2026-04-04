@@ -6,13 +6,39 @@
 
 BEGIN;
 
-ALTER TABLE shots
-  ADD COLUMN skip_extraction BOOLEAN NOT NULL DEFAULT 0;
+SET @skip_extraction_exists = (
+  SELECT COUNT(*)
+  FROM information_schema.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE()
+    AND TABLE_NAME = 'shots'
+    AND COLUMN_NAME = 'skip_extraction'
+);
+SET @sql = IF(
+  @skip_extraction_exists = 0,
+  'ALTER TABLE shots ADD COLUMN skip_extraction BOOLEAN NOT NULL DEFAULT 0',
+  'SELECT 1'
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
 
-ALTER TABLE shots
-  ADD COLUMN last_extracted_at DATETIME NULL;
+SET @last_extracted_at_exists = (
+  SELECT COUNT(*)
+  FROM information_schema.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE()
+    AND TABLE_NAME = 'shots'
+    AND COLUMN_NAME = 'last_extracted_at'
+);
+SET @sql = IF(
+  @last_extracted_at_exists = 0,
+  'ALTER TABLE shots ADD COLUMN last_extracted_at DATETIME NULL',
+  'SELECT 1'
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
 
-CREATE TABLE shot_extracted_candidates (
+CREATE TABLE IF NOT EXISTS shot_extracted_candidates (
   id INTEGER PRIMARY KEY AUTO_INCREMENT,
   shot_id VARCHAR(64) NOT NULL,
   candidate_type VARCHAR(32) NOT NULL,
@@ -34,13 +60,52 @@ CREATE TABLE shot_extracted_candidates (
     CHECK (candidate_status IN ('pending', 'linked', 'ignored'))
 );
 
-CREATE INDEX ix_shot_extracted_candidates_shot_id
-  ON shot_extracted_candidates (shot_id);
+SET @shot_id_index_exists = (
+  SELECT COUNT(*)
+  FROM information_schema.STATISTICS
+  WHERE TABLE_SCHEMA = DATABASE()
+    AND TABLE_NAME = 'shot_extracted_candidates'
+    AND INDEX_NAME = 'ix_shot_extracted_candidates_shot_id'
+);
+SET @sql = IF(
+  @shot_id_index_exists = 0,
+  'CREATE INDEX ix_shot_extracted_candidates_shot_id ON shot_extracted_candidates (shot_id)',
+  'SELECT 1'
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
 
-CREATE INDEX ix_shot_extracted_candidates_status
-  ON shot_extracted_candidates (candidate_status);
+SET @status_index_exists = (
+  SELECT COUNT(*)
+  FROM information_schema.STATISTICS
+  WHERE TABLE_SCHEMA = DATABASE()
+    AND TABLE_NAME = 'shot_extracted_candidates'
+    AND INDEX_NAME = 'ix_shot_extracted_candidates_status'
+);
+SET @sql = IF(
+  @status_index_exists = 0,
+  'CREATE INDEX ix_shot_extracted_candidates_status ON shot_extracted_candidates (candidate_status)',
+  'SELECT 1'
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
 
-CREATE INDEX ix_shot_extracted_candidates_type
-  ON shot_extracted_candidates (candidate_type);
+SET @type_index_exists = (
+  SELECT COUNT(*)
+  FROM information_schema.STATISTICS
+  WHERE TABLE_SCHEMA = DATABASE()
+    AND TABLE_NAME = 'shot_extracted_candidates'
+    AND INDEX_NAME = 'ix_shot_extracted_candidates_type'
+);
+SET @sql = IF(
+  @type_index_exists = 0,
+  'CREATE INDEX ix_shot_extracted_candidates_type ON shot_extracted_candidates (candidate_type)',
+  'SELECT 1'
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
 
 COMMIT;

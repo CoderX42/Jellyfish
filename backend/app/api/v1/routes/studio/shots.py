@@ -34,6 +34,7 @@ from app.services.studio.shot_frames import (
     update as update_shot_frame_image_service,
 )
 from app.services.studio.shots import (
+    build_shot_read,
     create as create_shot_service,
     delete as delete_shot_service,
     get as get_shot_service,
@@ -139,7 +140,7 @@ async def create_shot(
     db: AsyncSession = Depends(get_db),
 ) -> ApiResponse[ShotRead]:
     obj = await create_shot_service(db, body=body)
-    return created_response(ShotRead.model_validate(obj))
+    return created_response(await build_shot_read(db, shot=obj))
 
 
 @router.get(
@@ -246,7 +247,7 @@ async def update_shot_skip_extraction(
     db: AsyncSession = Depends(get_db),
 ) -> ApiResponse[ShotRead]:
     shot = await set_skip_extraction(db, shot_id=shot_id, skip=body.skip)
-    return success_response(ShotRead.model_validate(shot))
+    return success_response(await build_shot_read(db, shot=shot))
 
 
 @router.patch(
@@ -317,7 +318,7 @@ async def get_shot(
     db: AsyncSession = Depends(get_db),
 ) -> ApiResponse[ShotRead]:
     obj = await get_shot_service(db, shot_id=shot_id)
-    return success_response(ShotRead.model_validate(obj))
+    return success_response(await build_shot_read(db, shot=obj))
 
 
 @router.patch(
@@ -331,7 +332,7 @@ async def update_shot(
     db: AsyncSession = Depends(get_db),
 ) -> ApiResponse[ShotRead]:
     obj = await update_shot_service(db, shot_id=shot_id, body=body)
-    return success_response(ShotRead.model_validate(obj))
+    return success_response(await build_shot_read(db, shot=obj))
 
 
 @router.delete(

@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Button, Card, Divider, Empty, Layout, List, Modal, Spin, Typography, message } from 'antd'
-import { ArrowLeftOutlined } from '@ant-design/icons'
+import { Badge, Button, Card, Divider, Empty, Layout, List, Modal, Popconfirm, Segmented, Space, Spin, Tabs, Tooltip, Typography, message } from 'antd'
+import { ArrowLeftOutlined, ClearOutlined, ReloadOutlined } from '@ant-design/icons'
 import type {
   EntityNameExistenceItem,
   ShotAssetOverviewItem,
   ShotAssetsOverviewRead,
   ShotDialogLineRead,
   ShotDialogLineUpdate,
+  ShotExtractionSummaryRead,
   ShotExtractedDialogueCandidateRead,
   ShotRead,
 } from '../../../services/generated'
@@ -40,6 +41,119 @@ type AssetVM = NamedDraft & {
   candidateId?: number
   candidateStatus?: ShotAssetOverviewItem['candidate_status']
 }
+type ShotListFilter = 'all' | 'not_extracted' | 'pending'
+
+const DEFAULT_EXTRACTION_SUMMARY: ShotExtractionSummaryRead = {
+  state: 'not_extracted',
+  has_extracted: false,
+  last_extracted_at: null,
+  asset_candidate_total: 0,
+  dialogue_candidate_total: 0,
+  pending_asset_count: 0,
+  pending_dialogue_count: 0,
+}
+
+function getExtractionStateMeta(
+  shot: ShotRead | null,
+  pendingConfirmCount: number,
+): {
+  tone: 'green' | 'gold' | 'blue'
+  title: string
+  description: string
+} {
+  const state = shot?.extraction?.state
+  if (state === 'skipped') {
+    return {
+      tone: 'green',
+      title: '当前镜头已标记为无需提取',
+      description: '系统会直接按“提取确认已完成”处理。如需恢复正式提取流程，请使用上方维护动作。',
+    }
+  }
+  if (state === 'not_extracted') {
+    return {
+      tone: 'gold',
+      title: '当前镜头还没有执行过信息提取',
+      description: '点击“提取并刷新候选”后，系统会同时提取资产和对白候选。',
+    }
+  }
+  if (state === 'extracted_empty') {
+    return {
+      tone: 'blue',
+      title: '当前镜头已完成提取，但没有识别到候选',
+      description: '这说明系统已经跑过提取流程，只是当前没有识别到资产或对白候选。',
+    }
+  }
+  if (state === 'extracted_resolved') {
+    return {
+      tone: 'green',
+      title: '当前镜头的提取结果已确认完成',
+      description: '资产和对白候选都已处理完成，可以继续进入后续生成流程。',
+    }
+  }
+  return {
+    tone: 'gold',
+    title: '当前镜头仍有提取结果待确认',
+    description: `还有 ${pendingConfirmCount} 项待处理，建议先完成资产和对白确认。`,
+  }
+}
+
+function getShotExtractionSummary(shot: ShotRead | null | undefined): ShotExtractionSummaryRead {
+  return shot?.extraction ?? DEFAULT_EXTRACTION_SUMMARY
+}
+
+function getExtractionListStatus(shot: ShotRead): {
+  text: string
+  background: string
+  color: string
+} {
+  const state = getShotExtractionSummary(shot).state
+  if (state === 'skipped') {
+    return { text: '已跳过', background: '#e0f2fe', color: '#075985' }
+  }
+  if (state === 'not_extracted') {
+    return { text: '未提取', background: '#fef3c7', color: '#92400e' }
+  }
+  if (state === 'extracted_empty') {
+    return { text: '已提取无结果', background: '#dbeafe', color: '#1d4ed8' }
+  }
+  if (state === 'extracted_resolved' || shot.status === 'ready') {
+    return { text: '确认已完成', background: '#dbeafe', color: '#1d4ed8' }
+  }
+  return { text: '待确认', background: '#fef3c7', color: '#92400e' }
+}
+
+function isPendingExtractionConfirmation(shot: ShotRead): boolean {
+  return getShotExtractionSummary(shot).state === 'extracted_pending'
+}
+
+function isActionablePreparationShot(shot: ShotRead): boolean {
+  const state = getShotExtractionSummary(shot).state
+  return state === 'not_extracted' || state === 'extracted_pending'
+}
+
+function getShotPreparationIssueSummary(shot: ShotRead): {
+  text: string
+  tone: 'gold' | 'blue' | 'green'
+} {
+  const basicReady = !!shot.title?.trim() && !!shot.script_excerpt?.trim()
+  const extractionState = getShotExtractionSummary(shot).state
+  if (!basicReady) {
+    return { text: '基础待补', tone: 'gold' }
+  }
+  if (extractionState === 'not_extracted') {
+    return { text: '待执行提取', tone: 'gold' }
+  }
+  if (extractionState === 'extracted_pending') {
+    return { text: '待确认候选', tone: 'gold' }
+  }
+  if (extractionState === 'extracted_empty') {
+    return { text: '已提取无结果', tone: 'blue' }
+  }
+  if (extractionState === 'skipped') {
+    return { text: '已跳过提取', tone: 'blue' }
+  }
+  return { text: '准备完成', tone: 'green' }
+}
 
 function overviewTypeToAssetKind(kind: ShotAssetOverviewItem['type']): AssetKind {
   return kind === 'character' ? 'actor' : kind
@@ -66,8 +180,10 @@ export function ChapterShotEditPage() {
   const [shotAssetsOverview, setShotAssetsOverview] = useState<ShotAssetsOverviewRead | null>(null)
   const assetsOverviewRequestSeqRef = useRef(0)
   const [extractingAssets, setExtractingAssets] = useState(false)
+  const [batchExtractingAssets, setBatchExtractingAssets] = useState(false)
   const [skipExtractionUpdating, setSkipExtractionUpdating] = useState(false)
   const extractInFlightRef = useRef(false)
+  const [selectedShotIds, setSelectedShotIds] = useState<string[]>(shotId ? [shotId] : [])
 
   const [linkingOpen, setLinkingOpen] = useState(false)
   const [linkingLoading, setLinkingLoading] = useState(false)
@@ -98,12 +214,50 @@ export function ChapterShotEditPage() {
   const [dialogAddingKeys, setDialogAddingKeys] = useState<Record<string, boolean>>({})
   const [batchDialogAdding, setBatchDialogAdding] = useState(false)
   const [candidateActionIds, setCandidateActionIds] = useState<Record<number, boolean>>({})
+  const [editorTabKey, setEditorTabKey] = useState<'basic' | 'confirm'>('basic')
+  const [shotListFilter, setShotListFilter] = useState<ShotListFilter>('all')
   const dialogDebounceTimersRef = useRef<Map<number, number>>(new Map())
+  const tabAutoInitShotIdRef = useRef<string | null>(null)
+  const editorTabMemoryRef = useRef<Record<string, 'basic' | 'confirm'>>({})
 
   const shotsSorted = useMemo(
     () => [...shots].sort((a, b) => a.index - b.index),
     [shots],
   )
+  const selectedShots = useMemo(
+    () => shotsSorted.filter((item) => selectedShotIds.includes(item.id)),
+    [selectedShotIds, shotsSorted],
+  )
+  const multiSelectActive = selectedShotIds.length > 1
+  const shotListFilterCounts = useMemo(
+    () => ({
+      all: shotsSorted.length,
+      not_extracted: shotsSorted.filter((item) => getShotExtractionSummary(item).state === 'not_extracted').length,
+      pending: shotsSorted.filter((item) => isPendingExtractionConfirmation(item)).length,
+    }),
+    [shotsSorted],
+  )
+  const filteredShots = useMemo(() => {
+    if (shotListFilter === 'all') return shotsSorted
+    if (shotListFilter === 'not_extracted') {
+      return shotsSorted.filter((item) => getShotExtractionSummary(item).state === 'not_extracted')
+    }
+    return shotsSorted.filter((item) => isPendingExtractionConfirmation(item))
+  }, [shotListFilter, shotsSorted])
+  const nextActionableShot = useMemo(() => {
+    if (!shotId) return shotsSorted.find((item) => isActionablePreparationShot(item)) ?? null
+    const currentIndex = shotsSorted.findIndex((item) => item.id === shotId)
+    if (currentIndex < 0) {
+      return shotsSorted.find((item) => isActionablePreparationShot(item)) ?? null
+    }
+    for (let i = currentIndex + 1; i < shotsSorted.length; i += 1) {
+      if (isActionablePreparationShot(shotsSorted[i])) return shotsSorted[i]
+    }
+    for (let i = 0; i < currentIndex; i += 1) {
+      if (isActionablePreparationShot(shotsSorted[i])) return shotsSorted[i]
+    }
+    return null
+  }, [shotId, shotsSorted])
 
   const unionAssets = useMemo(() => {
     const groups: Record<AssetKind, AssetVM[]> = {
@@ -456,6 +610,18 @@ export function ChapterShotEditPage() {
   }, [loadPage])
 
   useEffect(() => {
+    if (!shotId) {
+      setSelectedShotIds([])
+      return
+    }
+    setSelectedShotIds((prev) => {
+      if (prev.length === 0) return [shotId]
+      if (!prev.includes(shotId) && prev.length <= 1) return [shotId]
+      return prev
+    })
+  }, [shotId])
+
+  useEffect(() => {
     void loadAssetsOverview()
   }, [loadAssetsOverview])
 
@@ -571,10 +737,83 @@ export function ChapterShotEditPage() {
     }
   }, [chapterId, loadAssetsOverview, loadDialogueCandidates, projectId, shot])
 
+  const batchExtractAssets = useCallback(async () => {
+    if (!projectId || !chapterId || selectedShots.length === 0) return
+    if (extractInFlightRef.current) return
+
+    const actionableShots = selectedShots
+      .filter((item) => !item.skip_extraction)
+      .sort((a, b) => a.index - b.index)
+
+    if (actionableShots.length === 0) {
+      message.info('当前选中的镜头都已标记为无需提取，如需调整请先恢复提取')
+      return
+    }
+
+    extractInFlightRef.current = true
+    setBatchExtractingAssets(true)
+    try {
+      const scriptDivision = {
+        total_shots: actionableShots.length,
+        shots: actionableShots.map((item) => ({
+          index: item.index,
+          start_line: 1,
+          end_line: 1,
+          script_excerpt: item.script_excerpt ?? '',
+          shot_name: item.title ?? '',
+        })),
+      }
+      const res = await ScriptProcessingService.extractScriptApiV1ScriptProcessingExtractPost({
+        requestBody: {
+          project_id: projectId,
+          chapter_id: chapterId,
+          script_division: scriptDivision as any,
+          consistency: undefined,
+          refresh_cache: true,
+        } as any,
+      })
+      if (!res.data) {
+        message.error(res.message || '批量提取失败')
+        return
+      }
+      message.success(
+        res.meta?.from_cache
+          ? `已从缓存加载 ${actionableShots.length} 条镜头的提取结果，请继续确认候选`
+          : `已提取并刷新 ${actionableShots.length} 条镜头，请继续确认候选`,
+      )
+      await loadPage()
+      await loadAssetsOverview()
+      await loadDialogueCandidates()
+    } catch {
+      message.error('批量提取失败')
+    } finally {
+      setBatchExtractingAssets(false)
+      extractInFlightRef.current = false
+    }
+  }, [chapterId, loadAssetsOverview, loadDialogueCandidates, loadPage, projectId, selectedShots])
+
   const goShot = (id: string) => {
     if (!projectId || !chapterId || id === shotId) return
+    setSelectedShotIds([id])
     navigate(`/projects/${projectId}/chapters/${chapterId}/shots/${id}/edit`)
   }
+  const handleShotListClick = useCallback(
+    (targetShotId: string, e: React.MouseEvent) => {
+      const isToggle = e.metaKey || e.ctrlKey
+      if (isToggle) {
+        setSelectedShotIds((prev) =>
+          prev.includes(targetShotId) ? prev.filter((id) => id !== targetShotId) : [...prev, targetShotId],
+        )
+        return
+      }
+      goShot(targetShotId)
+    },
+    [goShot],
+  )
+  const goNextActionableShot = useCallback(() => {
+    if (!nextActionableShot) return
+    goShot(nextActionableShot.id)
+  }, [nextActionableShot])
 
   const openLinkingModal = useCallback(
     async (kind: AssetKind, name: string, item: EntityNameExistenceItem, hint: string) => {
@@ -806,9 +1045,15 @@ export function ChapterShotEditPage() {
   const hasTitleAndExcerpt = !!title.trim() && !!scriptExcerpt.trim()
   const linkedAssetCount = shotAssetsOverview?.summary.linked_count ?? 0
   const pendingAssetCount = shotAssetsOverview?.summary.pending_count ?? 0
+  const pendingConfirmCount = pendingAssetCount + extractedDialogLines.length
   const assetsReady = !!shotAssetsOverview && pendingAssetCount === 0
   const dialogsReady = extractedDialogLines.length === 0
   const statusReady = shot?.status === 'ready'
+  const basicInfoReady = hasTitleAndExcerpt
+  const confirmReady = pendingConfirmCount === 0
+  const currentShotActionable = shot ? isActionablePreparationShot(shot) || !basicInfoReady : false
+  const extractionSummary = getShotExtractionSummary(shot)
+  const extractionStateMeta = getExtractionStateMeta(shot, pendingConfirmCount)
   const goToStudio = () => navigate(getChapterStudioPath(projectId, chapterId), {
     state: { focusShotId: shotId, selectedShotIds: shotId ? [shotId] : [] },
   })
@@ -829,24 +1074,40 @@ export function ChapterShotEditPage() {
       label: '资产',
       tone: assetsReady ? 'success' : shotAssetsOverview ? 'warning' : 'default',
       text: assetsReady
-        ? linkedAssetCount > 0
-          ? '资产候选已确认'
-          : '无资产候选或已全部忽略'
-        : shotAssetsOverview
-          ? `还有 ${pendingAssetCount} 项待处理`
-          : '建议先提取并确认资产',
+        ? extractionSummary.state === 'skipped'
+          ? '已跳过资产提取'
+          : extractionSummary.state === 'extracted_empty'
+            ? '已提取无候选'
+            : linkedAssetCount > 0
+              ? '已完成资产确认'
+              : '已完成资产确认'
+        : extractionSummary.state === 'not_extracted'
+          ? '未提取'
+          : extractionSummary.state === 'extracted_empty'
+            ? '已提取无候选'
+            : shotAssetsOverview
+              ? `待处理 ${pendingAssetCount}`
+              : '待处理',
     },
     {
       key: 'dialogs',
       label: '对白',
       tone: dialogsReady ? 'success' : extractedDialogLines.length > 0 ? 'warning' : 'default',
       text: dialogsReady
-        ? savedDialogLines.length > 0
-          ? '对白已确认'
-          : '当前镜头无对白，可继续后续流程'
-        : extractedDialogLines.length > 0
-          ? `有 ${extractedDialogLines.length} 条待确认`
-          : '可继续提取或补录对白',
+        ? extractionSummary.state === 'skipped'
+          ? '已跳过对白提取'
+          : extractionSummary.state === 'extracted_empty'
+            ? '已提取无候选'
+            : savedDialogLines.length > 0
+              ? '已完成对白确认'
+              : '已完成对白确认'
+        : extractionSummary.state === 'not_extracted'
+          ? '未提取'
+          : extractionSummary.state === 'extracted_empty'
+            ? '已提取无候选'
+            : extractedDialogLines.length > 0
+              ? `待处理 ${extractedDialogLines.length}`
+              : '待处理',
     },
     {
       key: 'shoot',
@@ -855,6 +1116,175 @@ export function ChapterShotEditPage() {
       text: statusReady
         ? '已具备进入视频生成流程的前置条件'
         : '请先完成信息提取确认',
+    },
+  ] as const
+
+  useEffect(() => {
+    if (!shotId) return
+    if (loading || !shot) return
+    const rememberedTab = editorTabMemoryRef.current[shotId]
+    if (rememberedTab) {
+      if (editorTabKey !== rememberedTab) setEditorTabKey(rememberedTab)
+      tabAutoInitShotIdRef.current = shotId
+      return
+    }
+    if (tabAutoInitShotIdRef.current === shotId) return
+    setEditorTabKey(pendingConfirmCount > 0 ? 'confirm' : 'basic')
+    tabAutoInitShotIdRef.current = shotId
+  }, [editorTabKey, loading, pendingConfirmCount, shot, shotId])
+
+  const handleEditorTabChange = useCallback(
+    (key: string) => {
+      const nextKey = key as 'basic' | 'confirm'
+      setEditorTabKey(nextKey)
+      if (shotId) {
+        editorTabMemoryRef.current[shotId] = nextKey
+        tabAutoInitShotIdRef.current = shotId
+      }
+    },
+    [shotId],
+  )
+
+  const editorTabItems = [
+    {
+      key: 'basic',
+      label: (
+        <div className="flex items-center gap-2">
+          <span
+            className="inline-block h-2 w-2 rounded-full"
+            style={{ background: basicInfoReady ? '#22c55e' : '#f59e0b' }}
+          />
+          <span>1 基础信息</span>
+        </div>
+      ),
+      children: (
+        <ChapterShotBasicInfoSection
+          title={title}
+          scriptExcerpt={scriptExcerpt}
+          saving={saving}
+          onTitleChange={setTitle}
+          onScriptExcerptChange={setScriptExcerpt}
+          onSave={() => void saveShot()}
+        />
+      ),
+    },
+    {
+      key: 'confirm',
+      label: (
+        <div className="flex items-center gap-2">
+          <span
+            className="inline-block h-2 w-2 rounded-full"
+            style={{ background: confirmReady ? '#22c55e' : '#f59e0b' }}
+          />
+          <span>2 提取确认</span>
+          {pendingConfirmCount > 0 ? <Badge count={pendingConfirmCount} size="small" /> : null}
+        </div>
+      ),
+      children: (
+        <div className="rounded-2xl border border-slate-200 bg-slate-50/70 px-4 py-4 space-y-4">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0">
+              <div className="text-sm font-medium text-slate-900">提取确认工作区</div>
+              <div className="text-[11px] text-slate-500 mt-1">
+                这里集中处理系统提取出的资产和对白候选，确认完成后当前镜头才能真正进入生成阶段。
+              </div>
+              <div
+                className="mt-3 rounded-lg border px-3 py-2 text-xs"
+                style={{
+                  borderColor:
+                    extractionStateMeta.tone === 'green'
+                      ? '#86efac'
+                      : extractionStateMeta.tone === 'blue'
+                        ? '#93c5fd'
+                        : '#fcd34d',
+                  background:
+                    extractionStateMeta.tone === 'green'
+                      ? '#f0fdf4'
+                      : extractionStateMeta.tone === 'blue'
+                        ? '#eff6ff'
+                        : '#fffbeb',
+                  color:
+                    extractionStateMeta.tone === 'green'
+                      ? '#166534'
+                      : extractionStateMeta.tone === 'blue'
+                        ? '#1d4ed8'
+                        : '#92400e',
+                }}
+              >
+                <div className="font-medium">{extractionStateMeta.title}</div>
+                <div className="mt-1 opacity-90">{extractionStateMeta.description}</div>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                type="primary"
+                size="small"
+                loading={extractingAssets}
+                onClick={() => void extractAssets()}
+              >
+                提取并刷新候选
+              </Button>
+              {shot?.skip_extraction ? (
+                <Button
+                  size="small"
+                  loading={skipExtractionUpdating}
+                  onClick={() => void updateSkipExtraction(false)}
+                >
+                  恢复提取
+                </Button>
+              ) : (
+                <Popconfirm
+                  title="确认标记为无需提取？"
+                  description="标记后当前镜头会直接按“提取确认已完成”处理。"
+                  okText="确认"
+                  cancelText="取消"
+                  onConfirm={() => void updateSkipExtraction(true)}
+                  okButtonProps={{ danger: true, loading: skipExtractionUpdating }}
+                  cancelButtonProps={{ disabled: skipExtractionUpdating }}
+                >
+                  <Button
+                    size="small"
+                    danger
+                    loading={skipExtractionUpdating}
+                  >
+                    无需提取
+                  </Button>
+                </Popconfirm>
+              )}
+            </div>
+          </div>
+
+          <ChapterShotAssetConfirmation
+            projectId={projectId}
+            extraction={extractionSummary}
+            unionAssets={unionAssets}
+            expandedKinds={expandedKinds}
+            candidateActionIds={candidateActionIds}
+            existenceByKindName={existenceByKindName}
+            onToggleExpanded={toggleExpanded}
+            onIgnoreCandidate={(asset) => void ignoreCandidate(asset)}
+            onHandleNewAsset={(asset) => void handleNewAsset(asset)}
+          />
+
+          <Divider className="!my-1" />
+          <ChapterShotDialogueConfirmation
+            extraction={extractionSummary}
+            savedDialogLines={savedDialogLines}
+            extractedDialogLines={extractedDialogLines}
+            batchDialogAdding={batchDialogAdding}
+            dialogLoading={dialogLoading}
+            dialogDeletingIds={dialogDeletingIds}
+            dialogAddingKeys={dialogAddingKeys}
+            onAcceptAll={() => void acceptAllExtractedDialogLines()}
+            onIgnoreAll={() => void ignoreAllExtractedDialogLines()}
+            onDeleteSavedDialogLine={(lineId) => void deleteSavedDialogLine(lineId)}
+            onUpdateSavedDialogText={updateSavedDialogText}
+            onAddExtractedDialogLine={(line) => void addExtractedDialogLine(line)}
+            onIgnoreExtractedDialogLine={(line) => void ignoreExtractedDialogLine(line)}
+            onUpdateExtractedDialogText={updateExtractedDialogText}
+          />
+        </div>
+      ),
     },
   ] as const
 
@@ -928,7 +1358,45 @@ export function ChapterShotEditPage() {
             <div style={{ flex: 1, minHeight: 0, display: 'flex', gap: 12, overflow: 'hidden' }}>
               <Card
                 size="small"
-                title={`镜头（${shotsSorted.length}）`}
+                title={
+                  <div className="flex min-w-0 items-center justify-between gap-2">
+                    <Space size={8} className="min-w-0 overflow-hidden">
+                      <span className="font-medium shrink-0">{`镜头（${shotsSorted.length}）`}</span>
+                      {!multiSelectActive ? (
+                        <Space size={4} className="min-w-0 text-[11px] text-slate-500">
+                          <ReloadOutlined className="shrink-0" />
+                          <span className="truncate" title="Command/Ctrl + 点击多选">
+                            Command/Ctrl + 点击多选
+                          </span>
+                        </Space>
+                      ) : (
+                        <span className="text-xs font-normal text-slate-500 shrink-0">{`已选 ${selectedShotIds.length} 条`}</span>
+                      )}
+                    </Space>
+                    {multiSelectActive ? (
+                      <Space size={6} className="shrink-0">
+                        <Tooltip title="批量提取并刷新">
+                          <Button
+                            size="small"
+                            type="primary"
+                            shape="circle"
+                            icon={<ReloadOutlined />}
+                            loading={batchExtractingAssets}
+                            onClick={() => void batchExtractAssets()}
+                          />
+                        </Tooltip>
+                        <Tooltip title="清空选择">
+                          <Button
+                            size="small"
+                            shape="circle"
+                            icon={<ClearOutlined />}
+                            onClick={() => setSelectedShotIds(shotId ? [shotId] : [])}
+                          />
+                        </Tooltip>
+                      </Space>
+                    ) : null}
+                  </div>
+                }
                 style={{
                   width: 320,
                   minWidth: 260,
@@ -941,27 +1409,137 @@ export function ChapterShotEditPage() {
                 }}
                 bodyStyle={{ padding: 8, flex: 1, minHeight: 0, overflow: 'auto' }}
               >
+                <div className="mb-3">
+                  <Segmented<ShotListFilter>
+                    block
+                    size="small"
+                    value={shotListFilter}
+                    onChange={(value) => setShotListFilter(value)}
+                    options={[
+                      { label: `全部 ${shotListFilterCounts.all}`, value: 'all' },
+                      { label: `未提取 ${shotListFilterCounts.not_extracted}`, value: 'not_extracted' },
+                      { label: `待确认 ${shotListFilterCounts.pending}`, value: 'pending' },
+                    ]}
+                  />
+                  <div className="mt-2">
+                    <Button
+                      block
+                      size="small"
+                      disabled={!nextActionableShot || nextActionableShot.id === shotId}
+                      type={!currentShotActionable && nextActionableShot && nextActionableShot.id !== shotId ? 'primary' : 'default'}
+                      onClick={goNextActionableShot}
+                    >
+                      {nextActionableShot
+                        ? !currentShotActionable && nextActionableShot.id !== shotId
+                          ? `继续处理下一个待处理镜头：#${nextActionableShot.index}`
+                          : `下一个待处理：#${nextActionableShot.index}`
+                        : '当前没有待处理镜头'}
+                    </Button>
+                  </div>
+                </div>
                 <List
                   size="small"
-                  dataSource={shotsSorted}
+                  dataSource={filteredShots}
                   locale={{ emptyText: <Empty description="暂无镜头" image={Empty.PRESENTED_IMAGE_SIMPLE} /> }}
                   renderItem={(item) => {
                     const active = item.id === shotId
+                    const selected = selectedShotIds.includes(item.id)
+                    const itemBasicReady = !!item.title?.trim() && !!item.script_excerpt?.trim()
+                    const itemConfirmStatus = getExtractionListStatus(item)
+                    const itemIssueSummary = getShotPreparationIssueSummary(item)
+                    const itemActionable = isActionablePreparationShot(item) || !itemBasicReady
+                    const itemCompleted = itemBasicReady && !itemActionable
                     return (
                       <List.Item
-                        onClick={() => goShot(item.id)}
+                        onClick={(e) => handleShotListClick(item.id, e)}
                         style={{
                           cursor: 'pointer',
                           borderRadius: 10,
                           padding: '8px 10px',
-                          background: active ? 'rgba(59,130,246,0.10)' : undefined,
+                          background: active
+                            ? itemCompleted
+                              ? 'rgba(34,197,94,0.12)'
+                              : 'rgba(59,130,246,0.10)'
+                            : selected
+                              ? 'rgba(59,130,246,0.06)'
+                            : itemActionable
+                              ? 'rgba(245,158,11,0.06)'
+                              : itemCompleted
+                                ? 'rgba(34,197,94,0.04)'
+                              : undefined,
+                          border: active
+                            ? itemCompleted
+                              ? '1px solid rgba(34,197,94,0.28)'
+                              : '1px solid rgba(59,130,246,0.25)'
+                            : selected
+                              ? '1px solid rgba(59,130,246,0.18)'
+                            : itemActionable
+                              ? '1px solid rgba(245,158,11,0.22)'
+                              : itemCompleted
+                                ? '1px solid rgba(34,197,94,0.16)'
+                              : '1px solid transparent',
+                          boxShadow: active && itemCompleted ? '0 0 0 1px rgba(34,197,94,0.08) inset' : undefined,
                         }}
                       >
                         <div className="min-w-0">
-                          <div className="font-medium truncate">
-                            #{item.index} · {item.title?.trim() ? item.title : '未命名镜头'}
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="font-medium truncate">
+                              #{item.index} · {item.title?.trim() ? item.title : '未命名镜头'}
+                            </div>
+                            <div className="flex shrink-0 items-center gap-1">
+                              {active && itemCompleted ? (
+                                <span
+                                  className="inline-flex items-center rounded-md px-2 py-0.5 text-[10px] font-medium"
+                                  style={{
+                                    background: '#dcfce7',
+                                    color: '#166534',
+                                  }}
+                                >
+                                  当前已完成
+                                </span>
+                              ) : null}
+                              <span
+                                className="inline-flex items-center rounded-md px-2 py-0.5 text-[10px] font-medium"
+                                style={{
+                                  background:
+                                    itemIssueSummary.tone === 'green'
+                                      ? '#dcfce7'
+                                      : itemIssueSummary.tone === 'blue'
+                                        ? '#dbeafe'
+                                        : '#fef3c7',
+                                  color:
+                                    itemIssueSummary.tone === 'green'
+                                      ? '#166534'
+                                      : itemIssueSummary.tone === 'blue'
+                                        ? '#1d4ed8'
+                                        : '#92400e',
+                                }}
+                              >
+                                {itemIssueSummary.text}
+                              </span>
+                            </div>
                           </div>
                           <div className="text-xs text-gray-500 truncate">{item.script_excerpt ?? ''}</div>
+                          <div className="mt-1 flex flex-wrap items-center gap-1">
+                            <span
+                              className="inline-flex items-center rounded-md px-2 py-0.5 text-[10px] font-medium"
+                              style={{
+                                background: itemBasicReady ? '#dcfce7' : '#fef3c7',
+                                color: itemBasicReady ? '#166534' : '#92400e',
+                              }}
+                            >
+                              {itemBasicReady ? '基础已完成' : '基础待补'}
+                            </span>
+                            <span
+                              className="inline-flex items-center rounded-md px-2 py-0.5 text-[10px] font-medium"
+                              style={{
+                                background: itemConfirmStatus.background,
+                                color: itemConfirmStatus.color,
+                              }}
+                            >
+                              {itemConfirmStatus.text}
+                            </span>
+                          </div>
                         </div>
                       </List.Item>
                     )
@@ -994,52 +1572,11 @@ export function ChapterShotEditPage() {
                 }}
                 bodyStyle={{ padding: 12, flex: 1, minHeight: 0, overflow: 'auto' }}
               >
-                <div className="space-y-3">
-                  <ChapterShotBasicInfoSection
-                    title={title}
-                    scriptExcerpt={scriptExcerpt}
-                    saving={saving}
-                    statusReady={statusReady}
-                    onTitleChange={setTitle}
-                    onScriptExcerptChange={setScriptExcerpt}
-                    onSave={() => void saveShot()}
-                    onGoToStudio={goToStudio}
-                  />
-
-                  <Divider className="!my-2" />
-                  <ChapterShotAssetConfirmation
-                    projectId={projectId}
-                    extractingAssets={extractingAssets}
-                    skipExtractionUpdating={skipExtractionUpdating}
-                    skipExtraction={!!shot?.skip_extraction}
-                    unionAssets={unionAssets}
-                    expandedKinds={expandedKinds}
-                    candidateActionIds={candidateActionIds}
-                    existenceByKindName={existenceByKindName}
-                    onExtractAssets={() => void extractAssets()}
-                    onUpdateSkipExtraction={(skip) => void updateSkipExtraction(skip)}
-                    onToggleExpanded={toggleExpanded}
-                    onIgnoreCandidate={(asset) => void ignoreCandidate(asset)}
-                    onHandleNewAsset={(asset) => void handleNewAsset(asset)}
-                  />
-
-                  <Divider className="!my-2" />
-                  <ChapterShotDialogueConfirmation
-                    savedDialogLines={savedDialogLines}
-                    extractedDialogLines={extractedDialogLines}
-                    batchDialogAdding={batchDialogAdding}
-                    dialogLoading={dialogLoading}
-                    dialogDeletingIds={dialogDeletingIds}
-                    dialogAddingKeys={dialogAddingKeys}
-                    onAcceptAll={() => void acceptAllExtractedDialogLines()}
-                    onIgnoreAll={() => void ignoreAllExtractedDialogLines()}
-                    onDeleteSavedDialogLine={(lineId) => void deleteSavedDialogLine(lineId)}
-                    onUpdateSavedDialogText={updateSavedDialogText}
-                    onAddExtractedDialogLine={(line) => void addExtractedDialogLine(line)}
-                    onIgnoreExtractedDialogLine={(line) => void ignoreExtractedDialogLine(line)}
-                    onUpdateExtractedDialogText={updateExtractedDialogText}
-                  />
-                </div>
+                <Tabs
+                  activeKey={editorTabKey}
+                  onChange={handleEditorTabChange}
+                  items={editorTabItems as any}
+                />
               </Card>
             </div>
           )}

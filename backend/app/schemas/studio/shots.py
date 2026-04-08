@@ -36,6 +36,22 @@ class ShotBase(BaseModel):
     )
 
 
+class ShotExtractionSummaryRead(BaseModel):
+    state: Literal[
+        "not_extracted",
+        "extracted_empty",
+        "extracted_pending",
+        "extracted_resolved",
+        "skipped",
+    ] = Field(..., description="镜头提取确认状态摘要")
+    has_extracted: bool = Field(..., description="是否已执行过提取")
+    last_extracted_at: datetime | None = Field(None, description="最近一次提取完成时间")
+    asset_candidate_total: int = Field(0, description="资产候选总数")
+    dialogue_candidate_total: int = Field(0, description="对白候选总数")
+    pending_asset_count: int = Field(0, description="待确认资产候选数")
+    pending_dialogue_count: int = Field(0, description="待确认对白候选数")
+
+
 class ShotCreate(ShotBase):
     pass
 
@@ -52,6 +68,8 @@ class ShotUpdate(BaseModel):
 
 
 class ShotRead(ShotBase):
+    last_extracted_at: datetime | None = Field(None, description="最近一次完成信息提取的时间")
+    extraction: ShotExtractionSummaryRead = Field(..., description="镜头提取状态摘要")
     model_config = ConfigDict(from_attributes=True)
 
 

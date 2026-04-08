@@ -42,6 +42,7 @@ from app.services.studio import (
     sync_shot_extracted_dialogue_candidates_from_draft,
     render_shot_video_prompt_preview,
 )
+from app.services.studio.shots import build_shot_read
 from app.services.studio.shot_details import update as update_shot_detail
 from app.services.studio.shot_dialogs import delete as delete_shot_dialog
 from app.schemas.studio.shots import (
@@ -83,6 +84,28 @@ async def test_recompute_shot_status_keeps_pending_without_candidates() -> None:
         status = await recompute_shot_status(db, shot_id=shot.id)
         assert status == ShotStatus.pending
         assert shot.status == ShotStatus.pending
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_build_shot_read_distinguishes_not_extracted_and_extracted_empty() -> None:
+    db, engine = await _build_session()
+    async with db:
+        shot = await _seed_graph(db)
+
+        initial = await build_shot_read(db, shot=shot)
+        assert initial.extraction.state == "not_extracted"
+        assert initial.extraction.has_extracted is False
+
+        await replace_shot_extracted_candidates(db, shot_id=shot.id, candidates=[])
+        await replace_shot_extracted_dialogue_candidates(db, shot_id=shot.id, candidates=[])
+
+        refreshed = await build_shot_read(db, shot=shot)
+        assert refreshed.extraction.state == "extracted_empty"
+        assert refreshed.extraction.has_extracted is True
+        assert refreshed.last_extracted_at is not None
+        assert refreshed.extraction.asset_candidate_total == 0
+        assert refreshed.extraction.dialogue_candidate_total == 0
     await engine.dispose()
 
 

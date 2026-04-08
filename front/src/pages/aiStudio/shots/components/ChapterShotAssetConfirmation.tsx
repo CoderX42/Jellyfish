@@ -1,9 +1,10 @@
-import { Button, Empty, Popconfirm, Tag, Tooltip } from 'antd'
+import { Button, Tag, Tooltip } from 'antd'
 import { DisplayImageCard } from '../../assets/components/DisplayImageCard'
 import { resolveAssetUrl } from '../../assets/utils'
 import type {
   EntityNameExistenceItem,
   ShotAssetOverviewItem,
+  ShotExtractionSummaryRead,
 } from '../../../../services/generated'
 
 type AssetKind = 'scene' | 'actor' | 'prop' | 'costume'
@@ -21,15 +22,11 @@ type AssetVM = {
 
 type ChapterShotAssetConfirmationProps = {
   projectId: string
-  extractingAssets: boolean
-  skipExtractionUpdating: boolean
-  skipExtraction: boolean
+  extraction: ShotExtractionSummaryRead
   unionAssets: Record<AssetKind, AssetVM[]>
   expandedKinds: Record<AssetKind, boolean>
   candidateActionIds: Record<number, boolean>
   existenceByKindName: Record<AssetKind, Record<string, EntityNameExistenceItem>>
-  onExtractAssets: () => void
-  onUpdateSkipExtraction: (skip: boolean) => void
   onToggleExpanded: (kind: AssetKind) => void
   onIgnoreCandidate: (asset: AssetVM) => void
   onHandleNewAsset: (asset: AssetVM) => void
@@ -44,19 +41,44 @@ function assetDetailUrl(kind: AssetKind, id: string, projectId: string) {
 
 export function ChapterShotAssetConfirmation({
   projectId,
-  extractingAssets,
-  skipExtractionUpdating,
-  skipExtraction,
+  extraction,
   unionAssets,
   expandedKinds,
   candidateActionIds,
   existenceByKindName,
-  onExtractAssets,
-  onUpdateSkipExtraction,
   onToggleExpanded,
   onIgnoreCandidate,
   onHandleNewAsset,
 }: ChapterShotAssetConfirmationProps) {
+  const pendingCount = Object.values(unionAssets).reduce(
+    (sum, items) => sum + items.filter((item) => item.status === 'new').length,
+    0,
+  )
+  const assetStatus = (() => {
+    if (extraction.state === 'skipped') {
+      return { text: '已跳过', color: 'blue' as const }
+    }
+    if (extraction.state === 'not_extracted') {
+      return { text: '未提取', color: 'gold' as const }
+    }
+    if ((extraction.asset_candidate_total ?? 0) === 0 && extraction.state === 'extracted_empty') {
+      return { text: '已提取无候选', color: 'default' as const }
+    }
+    if (pendingCount > 0) {
+      return { text: `待处理 ${pendingCount}`, color: 'gold' as const }
+    }
+    return { text: '已完成', color: 'green' as const }
+  })()
+
+  const emptyStateText =
+    extraction.state === 'skipped'
+      ? '当前镜头已标记为无需提取，资产候选已按完成处理'
+      : extraction.state === 'not_extracted'
+        ? '当前还没有执行提取，先在上方点击“提取并刷新候选”'
+        : extraction.state === 'extracted_empty'
+          ? '已执行提取，但当前没有识别到资产候选'
+          : '当前没有待确认的资产候选'
+
   const renderAssetCard = (asset: AssetVM) => {
     const existence = existenceByKindName[asset.kind][asset.name]
     const actionLabel = existence ? (existence.exists ? '关联' : '新建') : '…'
@@ -151,7 +173,9 @@ export function ChapterShotAssetConfirmation({
           ) : null}
         </div>
         {items.length === 0 ? (
-          <Empty description={`暂无${titleLabel}`} image={Empty.PRESENTED_IMAGE_SIMPLE} />
+          <div className="rounded-lg border border-dashed border-slate-200 bg-white px-3 py-5 text-xs text-slate-500">
+            {emptyStateText}
+          </div>
         ) : (
           <div className="space-y-3">
             <div className="space-y-2">
@@ -192,55 +216,21 @@ export function ChapterShotAssetConfirmation({
   }
 
   return (
-    <div>
+    <div className="space-y-4 rounded-xl border border-slate-200 bg-white/80 px-4 py-4">
       <div className="flex items-center justify-between gap-2 mb-2">
         <div>
-          <div className="text-xs text-gray-600 font-medium">信息提取与资产确认</div>
-          <div className="text-[11px] text-gray-500 mt-1">在这里提取并确认本镜头的资产候选，确认完成后再进入工作室继续生成。</div>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button
-            type="primary"
-            size="small"
-            loading={extractingAssets}
-            onClick={onExtractAssets}
-          >
-            提取并刷新候选
-          </Button>
-          {skipExtraction ? (
-            <Button
-              size="small"
-              loading={skipExtractionUpdating}
-              onClick={() => onUpdateSkipExtraction(false)}
-            >
-              恢复提取
-            </Button>
-          ) : (
-            <Popconfirm
-              title="确认标记为无需提取？"
-              description="标记后当前镜头会直接按“提取确认已完成”处理。"
-              okText="确认"
-              cancelText="取消"
-              onConfirm={() => onUpdateSkipExtraction(true)}
-              okButtonProps={{ danger: true, loading: skipExtractionUpdating }}
-              cancelButtonProps={{ disabled: skipExtractionUpdating }}
-            >
-              <Button
-                size="small"
-                danger
-                loading={skipExtractionUpdating}
-              >
-                无需提取
-              </Button>
-            </Popconfirm>
-          )}
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-slate-900 px-1.5 text-[11px] font-semibold text-white">
+              2.1
+            </span>
+            <div className="text-sm font-medium text-slate-900">资产候选确认</div>
+            <Tag color={assetStatus.color} className="m-0">
+              {assetStatus.text}
+            </Tag>
+          </div>
+          <div className="text-[11px] text-slate-500 mt-1">这里处理系统提取出的场景、角色、道具和服装候选。</div>
         </div>
       </div>
-      {skipExtraction ? (
-        <div className="mb-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-700">
-          当前镜头已标记为无需提取，系统会直接按“提取确认已完成”处理。
-        </div>
-      ) : null}
       <div className="space-y-4">
         {renderAssetGrid('scene', '场景', unionAssets.scene)}
         {renderAssetGrid('actor', '角色', unionAssets.actor)}

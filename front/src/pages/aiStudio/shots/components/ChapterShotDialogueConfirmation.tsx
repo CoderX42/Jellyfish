@@ -1,7 +1,8 @@
-import { Button, Empty, Input, Spin, Tooltip } from 'antd'
+import { Button, Input, Spin, Tooltip } from 'antd'
 import { DeleteOutlined, FireOutlined, PlusOutlined, SmileOutlined } from '@ant-design/icons'
 import type {
   ShotDialogLineRead,
+  ShotExtractionSummaryRead,
   ShotExtractedDialogueCandidateRead,
 } from '../../../../services/generated'
 
@@ -12,6 +13,7 @@ function dialogTitle(speaker?: string | null, target?: string | null) {
 }
 
 type ChapterShotDialogueConfirmationProps = {
+  extraction: ShotExtractionSummaryRead
   savedDialogLines: ShotDialogLineRead[]
   extractedDialogLines: ShotExtractedDialogueCandidateRead[]
   batchDialogAdding: boolean
@@ -28,6 +30,7 @@ type ChapterShotDialogueConfirmationProps = {
 }
 
 export function ChapterShotDialogueConfirmation({
+  extraction,
   savedDialogLines,
   extractedDialogLines,
   batchDialogAdding,
@@ -42,12 +45,65 @@ export function ChapterShotDialogueConfirmation({
   onIgnoreExtractedDialogLine,
   onUpdateExtractedDialogText,
 }: ChapterShotDialogueConfirmationProps) {
+  const pendingCount = extractedDialogLines.length
+  const dialogueStatus = (() => {
+    if (extraction.state === 'skipped') {
+      return { text: '已跳过', tone: 'blue' as const }
+    }
+    if (extraction.state === 'not_extracted') {
+      return { text: '未提取', tone: 'gold' as const }
+    }
+    if ((extraction.dialogue_candidate_total ?? 0) === 0 && extraction.state === 'extracted_empty') {
+      return { text: '已提取无候选', tone: 'default' as const }
+    }
+    if (pendingCount > 0) {
+      return { text: `待处理 ${pendingCount}`, tone: 'gold' as const }
+    }
+    return { text: '已完成', tone: 'green' as const }
+  })()
+  const emptyStateText =
+    extraction.state === 'skipped'
+      ? '当前镜头已标记为无需提取，对白候选已按完成处理'
+      : extraction.state === 'not_extracted'
+        ? '当前还没有执行提取，先在上方点击“提取并刷新候选”'
+        : extraction.state === 'extracted_empty'
+          ? '已执行提取，但当前没有识别到对白候选'
+          : '当前没有待确认对白；如果需要，也可以直接补录最终对白'
+
   return (
-    <div>
+    <div className="space-y-3 rounded-xl border border-slate-200 bg-white/80 px-4 py-4">
       <div className="flex items-center justify-between gap-2 mb-2">
         <div>
-          <div className="text-xs text-gray-600 font-medium">对白确认</div>
-          <div className="text-[11px] text-gray-500 mt-1">对白候选的接受与忽略也在这里完成，准备完成后可进入工作室继续生成。</div>
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-slate-900 px-1.5 text-[11px] font-semibold text-white">
+              2.2
+            </span>
+            <div className="text-sm font-medium text-slate-900">对白确认</div>
+            <span
+              className="inline-flex items-center rounded-md px-2 py-0.5 text-[11px] font-medium"
+              style={{
+                background:
+                  dialogueStatus.tone === 'green'
+                    ? '#dcfce7'
+                    : dialogueStatus.tone === 'blue'
+                      ? '#dbeafe'
+                      : dialogueStatus.tone === 'default'
+                        ? '#f1f5f9'
+                        : '#fef3c7',
+                color:
+                  dialogueStatus.tone === 'green'
+                    ? '#166534'
+                    : dialogueStatus.tone === 'blue'
+                      ? '#1d4ed8'
+                      : dialogueStatus.tone === 'default'
+                        ? '#475569'
+                        : '#92400e',
+              }}
+            >
+              {dialogueStatus.text}
+            </span>
+          </div>
+          <div className="text-[11px] text-slate-500 mt-1">这里处理系统提取出的对白候选，并确认最终对白内容。</div>
         </div>
         <div className="flex items-center gap-2">
           {extractedDialogLines.length > 0 ? (
@@ -66,7 +122,9 @@ export function ChapterShotDialogueConfirmation({
 
       <div className="space-y-2">
         {savedDialogLines.length === 0 && extractedDialogLines.length === 0 ? (
-          <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无对白" />
+          <div className="rounded-lg border border-dashed border-slate-200 bg-white px-3 py-5 text-xs text-slate-500">
+            {emptyStateText}
+          </div>
         ) : null}
 
         {savedDialogLines.length > 0 ? (

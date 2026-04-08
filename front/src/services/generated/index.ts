@@ -181,6 +181,7 @@ export type { ShotExtractedCandidateLinkRequest } from './models/ShotExtractedCa
 export type { ShotExtractedCandidateRead } from './models/ShotExtractedCandidateRead';
 export type { ShotExtractedDialogueCandidateAcceptRequest } from './models/ShotExtractedDialogueCandidateAcceptRequest';
 export type { ShotExtractedDialogueCandidateRead } from './models/ShotExtractedDialogueCandidateRead';
+export type { ShotExtractionSummaryRead } from './models/ShotExtractionSummaryRead';
 export type { ShotFrameImageCreate } from './models/ShotFrameImageCreate';
 export type { ShotFrameImageRead } from './models/ShotFrameImageRead';
 export type { ShotFrameImageTaskRequest } from './models/ShotFrameImageTaskRequest';

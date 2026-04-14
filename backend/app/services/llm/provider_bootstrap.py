@@ -25,5 +25,12 @@ def bootstrap_builtin_providers() -> None:
                 supported_categories=(ModelCategoryKey.image, ModelCategoryKey.video),
                 default_base_url="https://ark.cn-beijing.volces.com/api/v3",
             ),
+            ProviderSpec(
+                key="aliyun_bailian",
+                display_name="阿里百炼",
+                aliases=("阿里百炼", "aliyun", "bailian", "dashscope"),
+                supported_categories=(ModelCategoryKey.text,),
+                default_base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
+            ),
         ]
     )

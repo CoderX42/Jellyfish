@@ -2,6 +2,7 @@
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
+import type { ApiResponse_list_ProviderSupportedRead__ } from '../models/ApiResponse_list_ProviderSupportedRead__';
 import type { ApiResponse_ModelRead_ } from '../models/ApiResponse_ModelRead_';
 import type { ApiResponse_ModelSettingsRead_ } from '../models/ApiResponse_ModelSettingsRead_';
 import type { ApiResponse_NoneType_ } from '../models/ApiResponse_NoneType_';
@@ -81,6 +82,30 @@ export class LlmService {
             url: '/api/v1/llm/providers',
             body: requestBody,
             mediaType: 'application/json',
+            errors: {
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
+     * 列出系统支持的供应商能力
+     * @returns ApiResponse_list_ProviderSupportedRead__ Successful Response
+     * @throws ApiError
+     */
+    public static listSupportedProvidersApiV1LlmProvidersSupportedGet({
+        category,
+    }: {
+        /**
+         * 按模型类别过滤：text/image/video
+         */
+        category?: (ModelCategoryKey | null),
+    }): CancelablePromise<ApiResponse_list_ProviderSupportedRead__> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/v1/llm/providers/supported',
+            query: {
+                'category': category,
+            },
             errors: {
                 422: `Validation Error`,
             },

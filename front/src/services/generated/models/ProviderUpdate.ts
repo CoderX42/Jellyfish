@@ -12,9 +12,17 @@ export type ProviderUpdate = {
      */
     name?: (string | null);
     /**
-     * API Base URL
+     * 文本/通用 API Base URL
      */
     base_url?: (string | null);
+    /**
+     * 图片能力 API Base URL（可选覆盖）
+     */
+    image_base_url?: (string | null);
+    /**
+     * 视频能力 API Base URL（可选覆盖）
+     */
+    video_base_url?: (string | null);
     /**
      * 说明
      */
